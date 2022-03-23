@@ -558,6 +558,8 @@ output$downloadDataCoord <- downloadHandler(
     paste0(substr(input$surveydata$name, 0, nchar(input$surveydata$name)-4), "_Geospatial.csv")
   },
   content = function(file) {
+    
+    #writing csv and replacing NAs to empty strings (issue n°8)
     write.csv(geoDataCoord(), file, row.names = FALSE)
   },
   contentType = "text/csv"
