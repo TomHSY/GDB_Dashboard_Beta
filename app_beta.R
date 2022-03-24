@@ -37,7 +37,7 @@ tags$style("a{color:black; font-size:13px;}"),
 tags$style(".textbox{font-size:14px; text-align:justify; border: 2px solid #DA302C; padding: 5px; box-shadow: 4px 4px 10px 2px #E8C4AA;}"),
 
 setBackgroundColor(color = "#C5E3C6"), #background color
-theme = "bootstrap.css", #css theme used
+theme = "bootstrap_flatly.css", #css theme used
 useShinydashboard(), #"activating" the shinydashboard package
 
 ## Header ----------------------------------------------------------------------
