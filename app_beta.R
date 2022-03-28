@@ -12,6 +12,7 @@ library(leaflet)
 library(sp)
 library(rgdal)
 library(exactextractr)
+library(readxl)
 
 ## Laterite colors for graphs
 laterite_1 <- c("#D6EDD8", "#7DD9BA", "#ABE1B9") # to be used for single-select graphs
@@ -275,7 +276,17 @@ output$vardesc <- DT::renderDataTable({
 #Loads the csv file chosen by the user
 surveydata <- reactive({
   req(input$surveydata) #req() checks for required values
-  read.csv(input$surveydata$datapath)
+  filepath <- input$surveydata$datapath
+  
+  #if the file is a .csv
+  if (grepl("\\.csv$", filepath)){
+    read.csv(filepath)
+  } 
+  
+  #if the file is a .xlsx
+  else if (grepl("\\.xlsx$", filepath)){
+    read_excel(filepath)
+  }
 })
 
 
@@ -311,7 +322,10 @@ surveydata_coord <- eventReactive(input$gobtton, {
     rename(surveydata(), lat = input$lat, lon = input$lon) %>% 
       
       #removes any other column of the table other than those 2
-      select(lon, lat)
+      select(lon, lat) %>% 
+      
+      #convert them to numeric if they are character (from excel import)
+      mutate_if(is.character,as.numeric)
   }
 })
 
