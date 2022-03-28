@@ -469,6 +469,11 @@ output$variableSelectCoord <- renderUI({
 #Upon activation of the extract button : extracting the values of the chosen variables for the GPS coordinates
 geoDataCoord <- eventReactive(input$coordextractbutton, {
   
+  #initializing the loading bar
+  progress <-  Progress$new()
+  progress$set(message = "Please wait.", value = 0)
+  progress$inc(1, detail = 'Extracting...')
+  
   #Getting the variables that were checked and putting them in a list
   vars <- unname(unlist(isolate(reactiveValuesToList(input))[grepl("coordvar", names(input))])) 
   
@@ -489,6 +494,9 @@ geoDataCoord <- eventReactive(input$coordextractbutton, {
     #key step : extracting the extracting the values of the chosen variables for the GPS coordinates (raster package)
     stacks[[i]] <- raster::extract(raster::stack(vars_res[[i]]), data) 
   }
+  
+  #closing the progress widget
+  progress$close()
   
   #merging the original survey data with the variables
   cbind(surveydata(), do.call("cbind", stacks))
@@ -606,16 +614,18 @@ output$downloadCoord <- renderUI({
 
 #Names of the variable representing the name of the administrative units, to update if the shape files change
 unitsvarnames <- eventReactive(input$unitsbutton, { #upon activation of the units button
+  
   req(input$countrySelectUnit)
   switch(input$countrySelectUnit, "Ethiopia" = c("REGIONNAME", "ZONENAME", "WOREDANAME"),
-                                "Rwanda" = c("NAME_1", "NAME_2", "NAME_3", "NAME_4", "NAME_5"),
-                                "Kenya" = c("NAME_1", "NAME_2", "NAME_3", "NAME_4", "NAME_5"),
-                                "Uganda" = c("NAME_1", "NAME_2", "NAME_3", "NAME_4") 
+         "Rwanda" = c("NAME_1", "NAME_2", "NAME_3", "NAME_4", "NAME_5"),
+         "Kenya" = c("NAME_1", "NAME_2", "NAME_3", "NAME_4", "NAME_5"),
+         "Uganda" = c("NAME_1", "NAME_2", "NAME_3", "NAME_4") 
   )
 })
 
 #Names of the variable representing the code of the administrative units, to update if the shape files change
 unitsvarcodes <- eventReactive(input$unitsbutton, { #upon activation of the units button
+  
   req(input$countrySelectUnit)
   switch(input$countrySelectUnit, "Ethiopia" = c("RID", "Z4ID", "WOREDANO_"),
          "Rwanda" = c("ID_1", "ID_2", "ID_3", "ID_4", "ID_5"),
@@ -624,19 +634,27 @@ unitsvarcodes <- eventReactive(input$unitsbutton, { #upon activation of the unit
   )
 })
 
-
 #Loads the shapefiles for the selected country into the variable 'units'
 units <- eventReactive(input$unitsbutton, {
   req(input$countrySelectUnit)
+  
+  #initializing the loading bar
+  progress <-  Progress$new()
+  progress$set(message = "Please wait.", value = 0)
   
   #listing files for the country
   levels <- list.dirs(paste0("Data/shapes/", input$countrySelectUnit))[-1]
   
   units <- lapply(levels, function(l) {
+    progress$inc(1/length(levels), detail = paste("Loading shapefile", l))
     shp <- list.files(l, full.names = FALSE)[1]
     readOGR(l, substr(shp, 0, nchar(shp) - 4))
   })
   names(units) <- lapply(levels, function(x) { substr(x, regexpr("_", x)[[1]] + 1, nchar(x))})
+  
+  #closing the loading widget
+  progress$close()
+  
   units
 })
 
@@ -687,15 +705,15 @@ output$unitchoice <- renderUI({
         else listSubunits <- c()
         selectInput(inputId = paste0('unit', names(units)[", i, "]), label = h4(paste0('Select ', names(units)[", i, "])), choices = c('None', listSubunits), selected = 'None')
       })")))
-    select[[i]] <- uiOutput(paste0("out", names(units)[i]))
+      select[[i]] <- uiOutput(paste0("out", names(units)[i]))
     }
     
   } else {
     
     for(i in 2:length(units)){
-    namevar <- varnames[i]
-    codevar <- varcodes[i]
-    output[[paste0("out", names(units)[i])]] <- eval(parse(text = paste0("renderUI({
+      namevar <- varnames[i]
+      codevar <- varcodes[i]
+      output[[paste0("out", names(units)[i])]] <- eval(parse(text = paste0("renderUI({
         topunit <- req(input[[paste0('unit', names(units)[", i, "-1])]])
         if(topunit != 'None'){
               spaces <- gregexpr(' ', topunit)[[1]]
@@ -710,11 +728,11 @@ output$unitchoice <- renderUI({
         else listSubunits <- c()
         selectInput(inputId = paste0('unit', names(units)[", i, "]), label = h4(paste0('Select ', names(units)[", i, "])), choices = c('None', listSubunits), selected = 'None')
       })")))
-    select[[i]] <- uiOutput(paste0("out", names(units)[i]))
+      select[[i]] <- uiOutput(paste0("out", names(units)[i]))
     }
     
   }
-
+  
   i <- 1
   while(i+2 <= length(select)){
     tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, select[[i]]), column(width = 3, select[[i+1]]), column(width = 3, select[[i+2]]))
@@ -728,7 +746,7 @@ output$unitchoice <- renderUI({
   tags
 })
 
-#upon activation of the addUnit button : updates the "Chosen Units" fiel
+#upon activation of the addUnit button : updates the "Chosen Units" field
 observeEvent(input$addUnitButton, {
   
   #importing variables
@@ -807,7 +825,6 @@ output$unitsMap <- renderLeaflet({
 
 #Gives the choice of variables to the user, like in the GPS coordinates page and also the statistics they want for these variables
 output$variableSelectUnit <- renderUI({
-  
   req(units())
   
   #the output here is rendered as a tag list
@@ -865,6 +882,11 @@ geoDataUnit <- eventReactive(input$unitextractbutton, {
   stats <- req(input$stats)
   chosenUnits <- req(chosenUnits())
   
+  #initializing the loading bar
+  progress <-  Progress$new()
+  progress$set(message = "Please wait.", value = 0)
+  progress$inc(1/1, detail = "Extracting...")
+  
   #Getting the variables that were checked and putting them in a list
   vars <- unname(unlist(isolate(reactiveValuesToList(input))[grepl("unitvar", names(input))]))
   
@@ -888,6 +910,10 @@ geoDataUnit <- eventReactive(input$unitextractbutton, {
   }
   table <- do.call("cbind", stacks)
   row.names(table) <- names(chosenUnits)
+  
+  #closing progress widget
+  progress$close()
+  
   table
 })
 
