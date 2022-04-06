@@ -13,6 +13,7 @@ library(sp)
 library(rgdal)
 library(exactextractr)
 library(readxl)
+library(rgeos)
 
 ## Laterite colors for graphs
 laterite_1 <- c("#D6EDD8", "#7DD9BA", "#ABE1B9") # to be used for single-select graphs
@@ -62,8 +63,8 @@ tabPanel(h5(strong("Introduction")),
     fluidRow(style = "background-color:#FFFFFF;", 
              column(width = 6, offset = 3,
                     
-                   #Welcome to the dashboardd
-                   h2(style = "text-align: center;", "Welcome to the Laterite geospatial data dashboard!"), 
+                   #Welcome to the dashboard
+                   h2(style = "text-align: center;", "Welcome to the Laterite geospatial data dashboard (beta)!"), 
                    
                    #horizontal line
                    hr(), 
