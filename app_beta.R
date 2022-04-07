@@ -480,27 +480,21 @@ geoDataCoord <- eventReactive(input$coordextractbutton, {
   
   #Getting the resolutions of these variables
   res <- factor(unlist(lapply(vars, function(x){ slash <- gregexpr("/", x)[[1]]                   
-                                   substr(x, slash[3]+1, slash[4]-1 )})))
-  
-  #Separating the variables per resolution to know which ones to stack together
-  vars_res <- list()
-  for(l in levels(res)){
-    vars_res[[l]] <- vars[res==l]   
-  }
+  substr(x, slash[3]+1, slash[4]-1 )})))
   
   data <- surveydata_coord() #processed data from the csv
-  stacks <- list()
-  for(i in 1:length(levels(res))){
-    
+  
+  extracted <- list()
+  for (i in 1:length(vars)){
     #key step : extracting the extracting the values of the chosen variables for the GPS coordinates (raster package)
-    stacks[[i]] <- raster::extract(raster::stack(vars_res[[i]]), data) 
+    extracted[[i]] <- raster::extract(raster::stack(vars[[i]]), data)
   }
   
   #closing the progress widget
   progress$close()
   
   #merging the original survey data with the variables
-  cbind(surveydata(), do.call("cbind", stacks))
+  cbind(surveydata(), do.call("cbind", extracted))
 })
 
 
