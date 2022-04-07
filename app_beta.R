@@ -747,6 +747,9 @@ output$unitchoice <- renderUI({
   tags
 })
 
+#initializing the chosen administrative levels as a empty list
+chosenAdminLevels <- list()
+  
 #upon activation of the addUnit button : updates the "Chosen Units" field
 observeEvent(input$addUnitButton, {
   
@@ -768,6 +771,27 @@ observeEvent(input$addUnitButton, {
   if(chosenunit != "None") {
     newchosenunits <- c(input$listChosenUnits, chosenunit)
     updateSelectInput(session, inputId = "listChosenUnits", choices = c(chosenunit, input$listChosenUnits), selected = c(chosenunit, input$listChosenUnits))
+    
+    ### for each added unit, the corresponding levels (ex: region, zone, woreda) are stored in the variable chosenAdminLevels
+    #adding the chosen unit as ID of the list's elements
+    chosenAdminLevels$id[length(chosenAdminLevels$id)+1] <<- chosenunit
+    
+    #iterating over the admin levels
+    for (k in 1:length(units)){
+      
+      level <- names(units)[k]
+      
+      #fetching the selected unit and extracting its name and code
+      level_name_and_code <- input[[paste0("unit", names(units)[k])]]
+      level_name <- unlist(base::strsplit(level_name_and_code, " - "))[2]
+      level_code <- trimws(gsub(level,"",unlist(base::strsplit(level_name_and_code, " - "))[1]))
+      
+      #updating the list with the selected units
+      chosenAdminLevels[[paste0(level,"_name")]] <<- c(chosenAdminLevels[[paste0(level,"_name")]],
+                                                            level_name)
+      chosenAdminLevels[[paste0(level,"_code")]] <<- c(chosenAdminLevels[[paste0(level,"_code")]],
+                                                            level_code)
+    }
   }
 })
 
@@ -778,7 +802,7 @@ chosenUnits <- reactive({
   units <- req(units())
   listChosen <- req(input$listChosenUnits)
   varcodes <- req(unitsvarcodes())
-  
+
   unitNames <- list()
   
   l <- lapply(listChosen, function(unit){
@@ -793,11 +817,12 @@ chosenUnits <- reactive({
   setNames(l, listChosen)
 })
 
+
 #Creates the polygons corresponding to the chosen units
 chosenUnitsPolygons <- reactive({
   req(input$listChosenUnits)
   chosenunits <- req(chosenUnits())
-  
+
   poly <- list() #initial list of polygons : empty
   
   for(i in seq_len(length(chosenunits))){
@@ -931,13 +956,48 @@ output$unitStats <- DT::renderDataTable({
   )
 })
 
+includeAdminLevels <- function(geoDataUnit){
+  # Function that merges the geospatial data for the unit with the corresponding administrative levels (related to improvement n°6)
+  # Input : geoDataUnit : final output of the administrative unit tab
+  # Output : the same data merged with the administrative levels
+  
+  #converting the list to a dataframe
+  chosenAdminLevels <- as.data.frame(chosenAdminLevels)
+  
+  #adding rownames from the id column
+  rownames(chosenAdminLevels) <- chosenAdminLevels$id
+  chosenAdminLevels$id <- NULL
+  
+  #merging the 2 dataframes by their rownames. 
+  #Any row id not present in both tables is dismissed (case when the user decides to delete/modify his selection)
+  geoDataUnitPlus <- merge(chosenAdminLevels, geoDataUnit, by = 0)
+  
+  #rownames for the merged dataframe
+  rownames(geoDataUnitPlus) <- geoDataUnitPlus$Row.names
+  geoDataUnitPlus$Row.names <- NULL
+  
+  return(geoDataUnitPlus)
+}
+
 #Making these geospatial statistics available to download as a CSV
 output$downloadDataUnit <- downloadHandler(
   filename = function() {
     paste0("Geospatial_Data_", input$countrySelectUnit, ".csv")
   },
   content = function(file) {
-    write.csv(geoDataUnit(), file)
+    
+    #if the user chose to include the administrative levels in the final output
+    if (input$includeLevels){
+      
+      #including the levels
+      geoDataUnitPlus <- includeAdminLevels(geoDataUnit())
+      
+      #writing
+      write.csv(geoDataUnitPlus, file)
+      
+    } else {
+      write.csv(geoDataUnit(), file)
+    }
   },
   contentType = "text/csv"
 )
@@ -961,7 +1021,10 @@ output$downloadUnit <- renderUI({
     fluidRow(style = "background-color:#FFFFFF;", br()),
     
     #download unit button
-    fluidRow(style = "background-color:#FFFFFF;", column(width = 6, offset = 1, downloadButton("downloadDataUnit", h3("Export as CSV"), class = "btn-outline-success btn-lg"))),
+    fluidRow(style = "background-color:#FFFFFF;", 
+             column(width = 2, offset = 1, downloadButton("downloadDataUnit", h3("Export as CSV"), class = "btn-outline-success btn-lg")),
+             column(width = 10, offset = 1, checkboxInput('includeLevels', 'Include the administrative level info in the CSV'))
+             ),
     fluidRow(style = "background-color:#FFFFFF;", br())
   )
 })
