@@ -15,6 +15,7 @@ library(exactextractr)
 library(readxl)
 library(rgeos)
 
+
 ## Laterite colors for graphs
 laterite_1 <- c("#D6EDD8", "#7DD9BA", "#ABE1B9") # to be used for single-select graphs
 laterite_2 <- c("#7DD9BA") # to be used for multiple-select graphs
@@ -348,7 +349,6 @@ country <- eventReactive(input$gobtton, {
 
 
 ### Giving the choice of variables to the user ###
-
 getVarBox <- function(src, country, tab){
   # Function that returns a box which contains checkboxes for all the variables available from a given source
   # Inputs : scr : character indicating the source of the data
@@ -466,15 +466,12 @@ output$variableSelectCoord <- renderUI({
 
 
 ### Extracting the chosen geospatial variables for the loaded GPS coordinates ###
-
 #Upon activation of the extract button : extracting the values of the chosen variables for the GPS coordinates
 geoDataCoord <- eventReactive(input$coordextractbutton, {
-  
   #initializing the loading bar
   progress <-  Progress$new()
   progress$set(message = "Please wait.", value = 0)
-  progress$inc(1, detail = 'Extracting...')
-  
+
   #Getting the variables that were checked and putting them in a list
   vars <- unname(unlist(isolate(reactiveValuesToList(input))[grepl("coordvar", names(input))])) 
   
@@ -483,11 +480,16 @@ geoDataCoord <- eventReactive(input$coordextractbutton, {
   substr(x, slash[3]+1, slash[4]-1 )})))
   
   data <- surveydata_coord() #processed data from the csv
-  
   extracted <- list()
+  
+  # update : each variable is now processed individually. In the previous version, 
+  # variables of the same resolution were grouped and stacked together 
+  # although they had different extents, which generated an error (issue n°7)
   for (i in 1:length(vars)){
+    
     #key step : extracting the extracting the values of the chosen variables for the GPS coordinates (raster package)
     extracted[[i]] <- raster::extract(raster::stack(vars[[i]]), data)
+    progress$inc(1/length(vars), detail = paste('Extracting',vars[[i]]))
   }
   
   #closing the progress widget
