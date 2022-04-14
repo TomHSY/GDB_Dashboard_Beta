@@ -631,6 +631,9 @@ unitsvarcodes <- eventReactive(input$unitsbutton, { #upon activation of the unit
   )
 })
 
+#initializing the chosen administrative levels as an empty dataframe
+chosenAdminLevels <- data.frame()
+
 #Loads the shapefiles for the selected country into the variable 'units'
 units <- eventReactive(input$unitsbutton, {
   req(input$countrySelectUnit)
@@ -651,6 +654,9 @@ units <- eventReactive(input$unitsbutton, {
   
   #closing the loading widget
   progress$close()
+  
+  #resetting the potential previously chosen admin levels
+  chosenAdminLevels <<- data.frame()
   
   units
 })
@@ -680,78 +686,115 @@ output$unitchoice <- renderUI({
   names(listUnits) <- units[[1]][[varnames[1]]] 
   select <- list(selectInput(inputId = paste0("unit", names(units)[1]), label = h4(paste0("Select ", names(units)[1])), choices = listUnits))
   
-  if(input$countrySelectUnit != "Ethiopia"){
-    
-    for(i in 2:length(units)){
-      namevar <- varnames[i]
-      codevar <- varcodes[i]
-      nametopvar <- varnames[i-1]
-      codetopvar <- varcodes[i-1]
-      output[[paste0("out", names(units)[i])]] <- eval(parse(text = paste0("renderUI({
-        topunit <- req(input[[paste0('unit', names(units)[", i, "-1])]])
-        if(topunit != 'None'){
-              spaces <- gregexpr(' ', topunit)[[1]]
-              topunitcode <- substr(topunit, spaces[1] + 1, spaces[2] - 1)
-              subunits <- base::subset(units[[", i, "]], ", codetopvar, " == topunitcode)
-              if(length(subunits) > 0) {
-                listSubunits <- paste(names(units)[", i, "], subunits$", codevar, ", '-', subunits$", namevar, ", sep = ' ')
-                names(listSubunits) <- subunits$", namevar, "
-              }
-              else listSubunitd <- c()
-        }
-        else listSubunits <- c()
-        selectInput(inputId = paste0('unit', names(units)[", i, "]), label = h4(paste0('Select ', names(units)[", i, "])), choices = c('None', listSubunits), selected = 'None')
-      })")))
-      select[[i]] <- uiOutput(paste0("out", names(units)[i]))
-    }
-    
-  } else {
-    
-    for(i in 2:length(units)){
-      namevar <- varnames[i]
-      codevar <- varcodes[i]
-      output[[paste0("out", names(units)[i])]] <- eval(parse(text = paste0("renderUI({
-        topunit <- req(input[[paste0('unit', names(units)[", i, "-1])]])
-        if(topunit != 'None'){
-              spaces <- gregexpr(' ', topunit)[[1]]
-              topunitcode <- substr(topunit, spaces[1] + 1, spaces[2] - 1)
+  for(i in 2:length(units)){
+    namevar <- varnames[i]
+    codevar <- varcodes[i]
+    nametopvar <- varnames[i-1]
+    codetopvar <- varcodes[i-1]
+    output[[paste0("out", names(units)[i])]] <- eval(parse(text = paste0("renderUI({
+      topunit <- req(input[[paste0('unit', names(units)[", i, "-1])]])
+      if((topunit != 'None') && (topunit != 'All')){
+            spaces <- gregexpr(' ', topunit)[[1]]
+            topunitcode <- substr(topunit, spaces[1] + 1, spaces[2] - 1)
+            
+            if(input$countrySelectUnit == 'Ethiopia'){
               subunits <- base::subset(units[[", i, "]], substr(", codevar, ", 0, 2*(", i, "-1)) == topunitcode)
-              if(length(subunits) > 0) {
-                listSubunits <- paste(names(units)[", i, "], subunits$", codevar, ", '-', subunits$", namevar, ", sep = ' ')
-                names(listSubunits) <- subunits$", namevar, "
-              }
-              else listSubunits <- c()
-        }
-        else listSubunits <- c()
-        selectInput(inputId = paste0('unit', names(units)[", i, "]), label = h4(paste0('Select ', names(units)[", i, "])), choices = c('None', listSubunits), selected = 'None')
-      })")))
-      select[[i]] <- uiOutput(paste0("out", names(units)[i]))
-    }
-    
+            } else {
+              subunits <- base::subset(units[[", i, "]], ", codetopvar, " == topunitcode)
+            }
+            
+            if(length(subunits) > 0) {
+              listSubunits <- paste(names(units)[", i, "], subunits$", codevar, ", '-', subunits$", namevar, ", sep = ' ')
+              names(listSubunits) <- subunits$", namevar, "
+            }
+            else listSubunits <- c()
+      }
+      else listSubunits <- c()
+      choices <- c('None', listSubunits)
+      if (length(choices)>1){
+        choices <- append(choices, 'All', after=1)
+      }
+      selectInput(inputId = paste0('unit', names(units)[", i, "]), label = h4(paste0('Select ', names(units)[", i, "])), choices = choices, selected = 'None')
+    })")))
+    select[[i]] <- uiOutput(paste0("out", names(units)[i]))
   }
   
+  #iterating over the list, with the following condition:
   i <- 1
-  while(i+2 <= length(select)){
+  while(i+2 <= length(select)){ #controls the display of boxes (rows of 3 boxes)
     tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, select[[i]]), column(width = 3, select[[i+1]]), column(width = 3, select[[i+2]]))
     i <- i+3
   }
-  if(i < length(select)) tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, select[[i]]), column(width = 3, select[[i+1]]))
-  if(i == length(select)) tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, select[[i]]))
+ 
+  #dealing with remaining widgets that did not make a complete row of 3
+  if(i < length(select)){
+    tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, select[[i]]), column(width = 3, select[[i+1]]))
+  }
+  
+  if(i == length(select)){
+    tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, select[[i]]))
+  }
+  
+  #Add Unit Button
   tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, actionButton("addUnitButton", h4("Add unit"), icon("map-marked"), class = "btn-outline-success btn-lg")))
   tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", br())
+  
+  #Chosen Units
   tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, selectInput("listChosenUnits", label = "Chosen units", choices = NULL, multiple = TRUE)))
   tags
 })
 
-#initializing the chosen administrative levels as a empty list
-chosenAdminLevels <- list()
+updateChosenLevels <- function(chosenAdminLevels, toAdd, units){
+  # Function that updates the dataframe of the chosen admin levels, each time the add unit button is clicked
+  # Input : chosenAdminLevels : the already selected admin levels
+  #         toAdd : the chosen unit(s) to add to the dataframe
+  #         units : loaded shapefiles of administrative units, containing data
+  # Output : the updated chosenAdminLevels dataframe
   
+  ### for each added unit, the corresponding levels (ex: region, zone, woreda) are stored in the temporary variable chosenTmp
+  #adding the chosen unit(s) as ID of the df's elements
+  chosenTmp <- data.frame(id=toAdd)
+  
+  #iterating over the admin levels (ex: region, zone, woreda)
+  for (k in 1:length(units)){
+    level <- names(units)[k]
+    
+    #fetching the selected unit and extracting its name and code
+    level_name_and_code <- input[[paste0("unit", names(units)[k])]]
+    level_name <- unlist(base::strsplit(level_name_and_code, " - "))[2]
+    level_code <- trimws(gsub(level,"",unlist(base::strsplit(level_name_and_code, " - "))[1]))
+    
+    #if the user did not chose "All"
+    if (level_code != 'All'){
+      
+      #updating the df with the selected units
+      chosenTmp[,paste0(level,"_name")] <- level_name
+      chosenTmp[,paste0(level,"_code")] <- level_code
+    
+    #if the user chose "All"
+    } else {
+      
+      #the level names and codes are extracted from the id column. They are different from one unit to another
+      to_copy_name <- unlist(lapply(base::strsplit(chosenTmp$id, " - "), `[[`, 2))
+      to_copy_code <- trimws(gsub(level,"",unlist(lapply(base::strsplit(chosenTmp$id, " - "), `[[`, 1))))
+      
+      chosenTmp[,paste0(level,"_name")] <- to_copy_name
+      chosenTmp[,paste0(level,"_code")] <- to_copy_code
+      }
+  } 
+  
+  #merging the new chosenTmp to the old chosenAdminLevels
+  chosenAdminLevels <- rbind(chosenAdminLevels, chosenTmp)
+  return(chosenAdminLevels)
+}
+
 #upon activation of the addUnit button : updates the "Chosen Units" field
 observeEvent(input$addUnitButton, {
   
   #importing variables
   units <- req(units())
   varcodes <- unitsvarcodes()
+  varnames <- unitsvarnames()
   
   #initializing with None
   chosenunit <- "None"
@@ -765,29 +808,42 @@ observeEvent(input$addUnitButton, {
   
   #if a unit was added
   if(chosenunit != "None") {
-    newchosenunits <- c(input$listChosenUnits, chosenunit)
-    updateSelectInput(session, inputId = "listChosenUnits", choices = c(chosenunit, input$listChosenUnits), selected = c(chosenunit, input$listChosenUnits))
     
-    ### for each added unit, the corresponding levels (ex: region, zone, woreda) are stored in the variable chosenAdminLevels
-    #adding the chosen unit as ID of the list's elements
-    chosenAdminLevels$id[length(chosenAdminLevels$id)+1] <<- chosenunit
-    
-    #iterating over the admin levels
-    for (k in 1:length(units)){
+    #if the user select All
+    if (chosenunit == 'All'){
       
-      level <- names(units)[k]
+      #importing variables
+      namevar <- varnames[i+1]
+      codevar <- varcodes[i+1]
+      codetopvar <- varcodes[i]
       
-      #fetching the selected unit and extracting its name and code
-      level_name_and_code <- input[[paste0("unit", names(units)[k])]]
-      level_name <- unlist(base::strsplit(level_name_and_code, " - "))[2]
-      level_code <- trimws(gsub(level,"",unlist(base::strsplit(level_name_and_code, " - "))[1]))
+      #topunit is the unit level just before the current one
+      topunit <- req(input[[paste0('unit', names(units)[i])]])
       
-      #updating the list with the selected units
-      chosenAdminLevels[[paste0(level,"_name")]] <<- c(chosenAdminLevels[[paste0(level,"_name")]],
-                                                            level_name)
-      chosenAdminLevels[[paste0(level,"_code")]] <<- c(chosenAdminLevels[[paste0(level,"_code")]],
-                                                            level_code)
+      #extracting the code of this topunit
+      spaces <- gregexpr(' ', topunit)[[1]]
+      topunitcode <- substr(topunit, spaces[1] + 1, spaces[2] - 1)
+      
+      #between Ethiopia and the other countries, the underlying shapefile system is different
+      if(input$countrySelectUnit == 'Ethiopia'){
+        subunits <- eval(parse(text=paste0("base::subset(units[[i+1]]@data, str_starts(units[[i+1]]@data$",codevar,", topunitcode))")))
+      } else {
+        subunits <- eval(parse(text=paste0("base::subset(units[[i+1]]@data, ",codetopvar," == topunitcode)")))
+      }
+      
+      #list of all the selected units
+      listAll <- eval(parse(text=paste0("paste(names(units)[i+1], subunits$",codevar,", '-', subunits$",namevar,", sep = ' ')")))
+      names(listAll) <- subunits$namevar
+      
+      chosenunit <- listAll
     }
+    
+    #updating the selectinput with the new unit(s)
+    newchosenunits <- c(chosenunit, input$listChosenUnits)
+    updateSelectInput(session, inputId = "listChosenUnits", choices = newchosenunits, selected = newchosenunits)
+    
+    #updating the chosen admin levels dataframe
+    chosenAdminLevels <<- updateChosenLevels(chosenAdminLevels, chosenunit, units)
   }
 })
 
@@ -812,7 +868,6 @@ chosenUnits <- reactive({
   #setting listChosen's elements as names for l
   setNames(l, listChosen)
 })
-
 
 #Creates the polygons corresponding to the chosen units
 chosenUnitsPolygons <- reactive({
@@ -938,7 +993,6 @@ geoDataUnit <- eventReactive(input$unitextractbutton, {
   
   table
 })
-
 
 #Showing the results, i.e a table with one row for each chosen administrative units and the chosen statistics as columns
 output$unitStats <- DT::renderDataTable({
