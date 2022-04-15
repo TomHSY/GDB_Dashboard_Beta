@@ -735,13 +735,48 @@ output$unitchoice <- renderUI({
     tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, select[[i]]))
   }
   
-  #Add Unit Button
-  tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, actionButton("addUnitButton", h4("Add unit"), icon("map-marked"), class = "btn-outline-success btn-lg")))
+  tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", 
+                                     
+                                     #Add Unit Button
+                                     column(width = 2, offset = 1, actionButton("addUnitButton", h4("Add unit"), icon("map-marked"), class = "btn-outline-success btn-lg")),
+                                     
+                                     column(width = 3, offset = 1, fileInput("fileAUSelection", label=NULL, buttonLabel = "Upload units", accept = c("text/csv", "text/comma-separated-values,text/plain",".csv"))))
+                                            
   tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", br())
   
-  #Chosen Units
-  tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, selectInput("listChosenUnits", label = "Chosen units", choices = NULL, multiple = TRUE)))
+  tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", 
+                                     
+                                     #Chosen Units
+                                     column(width = 3, offset = 1, selectInput("listChosenUnits", label = "Chosen units", choices = NULL, multiple = TRUE)),
+                                     
+                                     #Download units button
+                                     div(style = "margin-top:1em;", column(width = 3, downloadButton("downloadSelectedAU", label="Save the selected units"))))
+  
   tags
+})
+
+output$downloadSelectedAU <- downloadHandler(
+  filename = function() {
+    paste0("AdminUnitSelection.csv")
+  },
+  content = function(file) {
+    to_write <- chosenAdminLevels[chosenAdminLevels$id %in% input$listChosenUnits,]
+    write.csv(to_write, file, row.names=FALSE)
+  },
+  contentType = "text/csv"
+)
+
+#uploads a pre-selected AU from a file
+observeEvent(input$fileAUSelection, {
+  
+  #loading the file containing the AU selection, chosen by the user
+  filepath <- input$fileAUSelection$datapath
+  AUSelection <- read_csv(filepath, show_col_types = FALSE)
+  chosenAdminLevels <<- AUSelection
+  
+  newchosenunits <- AUSelection$id
+  updateSelectInput(session, inputId = "listChosenUnits", choices = newchosenunits, selected = newchosenunits)
+
 })
 
 updateChosenLevels <- function(chosenAdminLevels, toAdd, units){
@@ -759,10 +794,18 @@ updateChosenLevels <- function(chosenAdminLevels, toAdd, units){
   for (k in 1:length(units)){
     level <- names(units)[k]
     
-    #fetching the selected unit and extracting its name and code
+    #fetching the selected unit
     level_name_and_code <- input[[paste0("unit", names(units)[k])]]
-    level_name <- unlist(base::strsplit(level_name_and_code, " - "))[2]
-    level_code <- trimws(gsub(level,"",unlist(base::strsplit(level_name_and_code, " - "))[1]))
+
+    if (level_name_and_code == "None"){
+      level_name <- "None"
+      level_code <- "None"
+      
+    } else {
+      #extracting its name and code
+      level_name <- unlist(base::strsplit(level_name_and_code, " - "))[2]
+      level_code <- trimws(gsub(level,"",unlist(base::strsplit(level_name_and_code, " - "))[1]))
+    }
     
     #if the user did not chose "All"
     if (level_code != 'All'){
@@ -770,8 +813,8 @@ updateChosenLevels <- function(chosenAdminLevels, toAdd, units){
       #updating the df with the selected units
       chosenTmp[,paste0(level,"_name")] <- level_name
       chosenTmp[,paste0(level,"_code")] <- level_code
-    
-    #if the user chose "All"
+      
+      #if the user chose "All"
     } else {
       
       #the level names and codes are extracted from the id column. They are different from one unit to another
@@ -780,7 +823,7 @@ updateChosenLevels <- function(chosenAdminLevels, toAdd, units){
       
       chosenTmp[,paste0(level,"_name")] <- to_copy_name
       chosenTmp[,paste0(level,"_code")] <- to_copy_code
-      }
+    }
   } 
   
   #merging the new chosenTmp to the old chosenAdminLevels
