@@ -14,6 +14,7 @@ library(rgdal)
 library(exactextractr)
 library(readxl)
 library(rgeos)
+library(stringr)
 
 
 ## Laterite colors for graphs
@@ -39,9 +40,16 @@ tags$style(".fa-twitter{color:#000000}"),
 tags$style("a{color:black; font-size:13px;}"),
 tags$style(".textbox{font-size:14px; text-align:justify; border: 2px solid #DA302C; padding: 5px; box-shadow: 4px 4px 10px 2px #E8C4AA;}"),
 
+#adding javascript code to manually unbind Shiny's inputs to the datatable's inputs (see inside the data_filtered reactive)
+#https://groups.google.com/g/shiny-discuss/c/ZUMBGGl1sss/m/7sdRQecLBAAJ
+tags$script(HTML("Shiny.addCustomMessageHandler('unbind-DT', function(id) {
+                            Shiny.unbindAll($(document.getElementById(id)).find('.dataTable'))
+                            })")),
+
 setBackgroundColor(color = "#C5E3C6"), #background color
 theme = "bootstrap_flatly.css", #css theme used
 useShinydashboard(), #"activating" the shinydashboard package
+
 
 ## Header ----------------------------------------------------------------------
 
@@ -52,7 +60,6 @@ titlePanel(fluidRow(column(width=3,
 ## Body ------------------------------------------------------------------------
 
 tabsetPanel(type = c("tabs"),
-   
                
                   
 ### Tab 1 : Introduction #######################################################
@@ -142,7 +149,7 @@ tabPanel(h5(strong("From GPS coordinates")),
            column(width = 10, offset = 1, conditionalPanel("input.gobtton", leafletOutput("map")))),
   
   
-  uiOutput("variableSelectCoord"),
+  uiOutput("varSelectCoord"),
   
   uiOutput("varrep"),
   
@@ -161,8 +168,8 @@ tabPanel(h5(strong("From GPS coordinates")),
 
 
 ### Tab 4 : By administrative units ############################################
-tabPanel(h5(strong("By administrative units")),
-         
+tabPanel(h5(strong("By administrative units")), id = "unit_tab",
+
   fluidRow(style = "background-color:#FFFFFF;", br()),
   
   #Title : Administrative Unit Selection
@@ -171,7 +178,7 @@ tabPanel(h5(strong("By administrative units")),
   
   #Instructions : Select the country you're interested in and click ...
   fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1, 
-                                                       tags$p(class = "textbox", "Select the country you're interested in and click on the button. It may take some time because all the administrative units from that country have to be loaded."))),
+                                                       tags$p(class = "textbox", "Select the country you're interested in, and click on the 'Loads units' button. Loading shapefiles may take some time."))),
   
   fluidRow(style = "background-color:#FFFFFF;", br()),
   
@@ -189,7 +196,7 @@ tabPanel(h5(strong("By administrative units")),
   fluidRow(style = "background-color:#FFFFFF;", 
            column(width = 10, offset = 1, conditionalPanel("input.addUnitButton", leafletOutput("unitsMap")))),
   
-  uiOutput("variableSelectUnit"),
+  uiOutput("varSelectUnit"),
   
   fluidRow(style = "background-color:#FFFFFF;", br()),
   
@@ -262,15 +269,17 @@ output$vardesc <- DT::renderDataTable({
     data = read.csv(paste0("Data/", input$countrySelectVar, "/", input$countrySelectVar, "_variables.csv")), 
     
     #other parameters
-    class = "hover cell-border", 
-    rownames = FALSE, 
-    options = list(pageLength = 50, searchHighlight = TRUE, orderClasses = TRUE, initComplete = JS(
-    "function(settings, json) {",
-    "$(this.api().table().header()).css({'background-color': '#7DD9BA', 'color': '#fff'});",
-    "}")
-    )
+    class = "hover cell-border",
+    selection = 'none',
+    rownames = FALSE,
+    options = list(pageLength = 50,
+                   
+                   searchHighlight = TRUE, 
+                   orderClasses = TRUE, 
+                   initComplete = JS("function(settings, json) {","$(this.api().table().header()).css({'background-color': '#7DD9BA', 'color': '#fff'});","}"))
   )
 })
+
 
 
 #From GPS coordinates Page------------------------------------------------------
@@ -347,138 +356,709 @@ country <- eventReactive(input$gobtton, {
   req(input$countryselect)
 })
 
-
-### Giving the choice of variables to the user ###
-getVarBox <- function(src, country, tab){
-  # Function that returns a box which contains checkboxes for all the variables available from a given source
-  # Inputs : scr : character indicating the source of the data
+###### Giving the choice of variables to the user
+varSelectionSection <- function(tab, instructions, country){
+  # Function that returns the section for variable selection (either in the coord or unit tab).
+  # It handles the dynamic datatable and the selection of variables
+  # Note that any widget in this section will have an ID depending on "tab"
+  # Inputs : instructions : instructions specific for the section (select coord or unit tab)
   #          country : character indicating the country
-  #          tab : 
+  #          tab : character indicating the tab
+  # Output : section : the UI section
+  #          rendered_table : the rendered filtered dynamic datatable
   
-  #listing all resolution folders (in the Country-Src-Res-Variable architecture)
-  res <- list.dirs(paste0("Data/", country, "/", src), full.names = FALSE)[-1]
-  res <- res[!grepl("/", res)]
   
-  #initialization of the variable lists
-  vars_unique <- list()
-  vars_multi <- list()
-  
-  #looping over resolution folders
-  for(r in res){
-    
-    #Variables with multiple obs. are obtained based on folders in the res folder
-    vars_multi[[r]] <- list.dirs(paste0("Data/", country, "/", src, "/", r), full.names = TRUE)[-1]
-    names(vars_multi[[r]]) <- unname(sapply(vars_multi[[r]], 
-                                            function(x){ substr(x, max(which(strsplit(x, "")[[1]]=="/")) + 1, nchar(x))}))
-    
-    #Unique variables are obtained from single files in the res folder
-    vars_unique[[r]] <- setdiff(list.files(paste0("Data/", country, "/", src, "/", r), full.names = TRUE), vars_multi[[r]])
-    names(vars_unique[[r]]) <- unname(sapply(vars_unique[[r]], 
-                                             function(x){ substr(x, max(which(strsplit(x, "")[[1]]=="/")) + 1, nchar(x) - 4)}))
-  }
-  
-  #initialization of the big checkbox, as a list object
-  checkbox <- list()
-  
-  #looping over resolution folders
-  for(r in res){
-    
-    ## checkbox group input for variables with single obs.
-    checkbox[[length(checkbox)+1]] <- checkboxGroupInput(inputId = paste0(tab, "var", src, r), 
-                                                         label = h3(r), 
-                                                         choiceNames = names(vars_unique[[r]]), 
-                                                         choiceValues = unname(vars_unique[[r]]))
-    
-    ## select inputs for variables with multiple obs.
-    
-    #looping over observations
-    for(i in seq_len(length(vars_multi[[r]]))){
-      
-      #current obs
-      v <- vars_multi[[r]][i]
-      
-      #listing files
-      choices <- list.files(v, full.names = TRUE)
-      
-      #renaming the choices
-      names(choices) <- unname(sapply(choices, 
-                                      function(x){ substr(x, max(which(strsplit(x, "")[[1]]=="/")) + 1 + nchar(names(v)), nchar(x) - 4)}))
-      
-      #select input is appended to the big checkbox
-      checkbox[[length(checkbox)+1]] <- selectInput(inputId = paste0(tab, "var", src, names(v)), 
-                                                    choices = choices, 
-                                                    multiple = TRUE, 
-                                                    label = names(v))
-    }
-  }
+  processTimeColumn <- function(country){
+    # Function that processes the Time column for the COUNTRY_variables.csv file. From it, 
+    # it extracts some information (see outputs)
+    # Inputs : country : character indicating the chosen country
+    # Outputs : time_list : a list associating to each variable its "time information" : the months/years on which it spans
+    #           levels_years : vector of all possible year choices for the variables
+    #           levels_months : vector of all possible month choices for the variables
+    #           data : the data of the csv file
 
-#creating the big checkbox
-box(title = h1(src, align = "center", style = "color: #FFFFFF"), width = NULL, solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE, status = "success", checkbox)
+    #reading data from the COUNTRY_variables.csv file
+    data <- read.csv(paste0("Data/", country, "/", country, "_variables.csv"), stringsAsFactors=T)
+    
+    #listing the available sources
+    src <- list.dirs(paste0("Data/", country), recursive = FALSE, full.names = FALSE)
+    
+    #listing all resolution folders (in the Country-Src-Res-Variable architecture)
+    res <- list.dirs(paste0("Data/", country, "/", src), full.names = FALSE)[-1]
+    res <- res[!grepl("/", res)]
+    res <- res[res != ""]
+    
+    #initializing with empty vectors
+    levels_years <- c()
+    levels_months <- c()
+    time_list <- list()
+    
+    list_months <- c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October","November", "December")
+    
+    list_16 <- c()
+    for (year in 2000:3000){
+      timeseq <- paste0(as.character(year), str_pad(seq(1,353,16), 3, pad = "0"))
+      list_16 <- append(list_16, timeseq)
+    }
+    
+    #looping over rows in the dataframe
+    for (i in 1:nrow(data)){
+      
+      #content of the Time field for the current row: what we will be looking into
+      content <- as.character(data$Time[i])
+      
+      #variable name
+      varname <- as.character(data$Variable.Name[i])
+      
+      tmp <- c()
+      
+      #if the variable contains time information
+      if (content != ""){
+        
+        #a character vector is made from the content, by splitting by commas.
+        #that supposes a rigorous formatting of the csv file. Example (for years):
+        # 2002, 2005, 2007-2011
+        vector <- unlist(strsplit(content, ","))
+        
+        #for each time (year, month, year-range, month-range etc.) in the vector
+        for (time in vector){
+          
+          #if the current element is a time range (example: 2007-2011), it is converted
+          #to individual time units (2007 2008 2009 2010 2011)
+          if (grepl('-', time)){
+            
+            #splitting by '-' to get the start and stop times
+            split <- unlist(base::strsplit(time, '-'))
+            start <- trimws(split[1]) #trimws removes any whitespace
+            stop <- trimws(split[2])
+            
+            #if the current element is a year (not a month)
+            if (grepl("[0-9]", start)){
+              
+              #if the current element is a "each 16 days" element (for ndvi, ndviano)
+              if (nchar(start) > 4){
+                ind_start <- match(start, list_16)
+                ind_stop <- match(stop, list_16)
+                
+                range_16_days <- list_16[ind_start:ind_stop]
+                
+                tmp <- append(tmp, range_16_days)
+              
+              #if the current element is a 4 digit year
+              } else {
+                
+                #the result is appended to the lists
+                levels_years <- append(levels_years, as.numeric(start):as.numeric(stop))
+                tmp <- append(tmp, as.character(as.numeric(start):as.numeric(stop)))
+              }
+            
+            #if the current element is a month
+            } else {
+              
+              #the month range is processed and a list of individual months is appended
+              ind_start <- match(start, list_months)
+              ind_stop <- match(stop, list_months)
+              
+              levels_months <- append(levels_months, list_months[ind_start:ind_stop])
+              tmp <- append(tmp, list_months[ind_start:ind_stop])
+            }
+          
+          #if the current element is not a time range, but an individual year/month    
+          } else {
+            levels_years <- append(levels_years, as.numeric(time))
+            tmp <- append(tmp, as.character(as.numeric(time)))
+          }
+        }
+      }
+      
+      #in this list, for each variable, the time information is stored
+      time_list[[varname]] <- tmp
+    }
+    return(list(time_list=time_list, levels_years=levels_years, levels_months=levels_months, data=data))
+  }
+  
+  #Renders the UI for the section
+  section <- renderUI({
+    
+    #checking required values
+    if (tab == "unit") req(units())
+    else req(surveydata_coord())
+    
+    #call to the processTimeColumn, to extract time information from variables
+    res <- processTimeColumn(country)
+    
+    #data stored in the COUNTRY_variables.csv file
+    data <- res$data
+    
+    #years/month choices available for the variables
+    levels_years <- res$levels_years
+    levels_months <- res$levels_months
+    
+    #the output here is rendered as a tag list
+    tags <- tagList()
+    
+    #Title and instructions for the selection of variables
+    tags[[1]] <- fluidRow(style = "background-color:#FFFFFF;", br())
+    tags[[2]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1,  br(h1("Geospatial variables selection"))))
+    tags[[3]] <- fluidRow(style = "background-color:#FFFFFF;", br(), column(width = 8, offset = 1, HTML(instructions)))
+    tags[[4]] <- fluidRow(style = "background-color:#FFFFFF;", br())
+    
+    #levels_years is processed again to separate years from "each 16 days" elements
+    choices_levels_years <- c(sort(unique(levels_years[nchar(levels_years)==4])),
+                              sort(unique(levels_years[nchar(levels_years)>=4])))
+    
+    #first row of filters
+    tags[[5]] <- fluidRow(style = "background-color:#FFFFFF;",
+               column(width = 3, offset = 1, selectInput(paste0("filterYear_",tab), "Filter by Year", choices=choices_levels_years, multiple=T)),
+               column(width = 3, selectInput(paste0("filterMonth_",tab), "Filter by Month (average over years)", choices=unique(levels_months), multiple=T)),
+               column(width = 3, selectInput(paste0("filterTheme_",tab), "Filter by Theme", choices=levels(data$Theme), multiple=T)))
+    
+    #second row of filters
+    tags[[6]] <- fluidRow(style = "background-color:#FFFFFF;",
+               column(width = 3, offset = 1, selectInput(paste0("filterSource_",tab), "Filter by Source", choices=levels(data$Source.Name), multiple=T)),
+               column(width = 3, selectInput(paste0("filterRes_",tab), "Filter by Resolution", choices=levels(data$Resolution), multiple=T)),
+               column(width = 3, actionButton(paste0("filterGo_",tab), h4("Filter"), icon=icon("refresh"))))
+    
+    #selected variables (empty at first)
+    tags[[7]] <- fluidRow(style = "background-color:#FFFFFF;", 
+                          column(width = 6, offset = 1, selectInput(paste0("input_selected_vars_", tab),
+                                                                    label = h4("Selected variables :"),
+                                                                    choices = c(),
+                                                                    selected = c(),
+                                                                    multiple=T,
+                                                                    width = '650px')),
+                          #clear selected variables button
+                          div(style = "margin-top:3em;", column(width = 2, actionButton(paste0('clear_selected_vars_', tab), label = "Clear"))))
+    
+    #dynamic datatable generated from the filters' inputs
+    tags[[8]] <- fluidRow(style = "background-color:#FFFFFF;",
+                          column(width = 10, offset = 1, DT::dataTableOutput(paste0("dynamic_datatable_", tab))))
+    
+                        
+    #statistical summary only for the unit section
+    if (tab == 'unit'){
+      
+      tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", br())
+      
+      #choice of the statistics
+      tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 11, offset = 1, checkboxGroupInput("stats", label = h3("Choose statistics"), inline = TRUE, choiceValues = list("min", "max", "mean", "quantile", "median", "variance", "stdev"), choiceNames = list(h4("Min"), h4("Max"), h4("Mean"), h4("First and third quartile"), h4("Median"), h4("Variance"), h4("Standard Deviation")) )))
+    }
+    
+    tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", br())
+    
+    #Extract action button
+    tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, actionButton(paste0(tab,"extractbutton"), h3("Extract"), icon("table"), class = "btn-outline-success btn-lg")))
+    
+    tags #"returning" the rendered tag list
+  })
+  
+  #Upon activation of the filterGo button, the data are filtered
+  data_filtered <- eventReactive(list(input[[paste0("filterGo_",tab)]], input$unit_tab),{
+    
+    #each time the data is filtered, shiny's inputs are unbound from those nested
+    # inside the datatable (the multiple select inputs) (see line 45)
+    session$sendCustomMessage('unbind-DT', paste0('dynamic_datatable_',tab))
+    
+    #call to the processTimeColumn function
+    res <- processTimeColumn(country)
+    
+    #the time_list is computed from the COUNTRY_variables.csv file
+    time_list <- res$time_list
+    
+    #we also get the data
+    data <- res$data
+    
+    ### formatting the dataframe
+    #initial column that will contain checkboxes
+    data$Check <- rep(" ", times=nrow(data))
+    
+    #reordering columns
+    col_order <- c("Check", "Variable.Name", "Description", "Time", "Theme", "Source.Name", "Resolution")
+    data_filtered <- data[, col_order]
+    
+    #renaming columns
+    names(data_filtered) <- c("Check", "Variable", "Description", "Time", "Theme", "Source", "Resolution")
+    
+    #the Variable/Time column is converted to character
+    data_filtered$Variable <- as.character(data_filtered$Variable)
+    data_filtered$Time <- as.character(data_filtered$Time)
+    
+    ### getting the inputs from the filters
+    input_year <- input[[paste0("filterYear_",tab)]]
+    input_month <- input[[paste0("filterMonth_",tab)]]
+    input_theme <- input[[paste0("filterTheme_",tab)]]
+    input_source <- input[[paste0("filterSource_",tab)]]
+    input_res <- input[[paste0("filterRes_",tab)]]
+    
+    ### filtering data (if the corresponding filter input is not empty)
+    if ((!is.null(input_year)) || (!is.null(input_month))){
+      
+      #initializing with an empty list of indexes
+      ind <- c() 
+      
+      #iterating over rows / variables
+      for (i in 1:nrow(data_filtered)){
+        varname <- data_filtered$Variable[i]
+        
+        #if the variable is present in time_list (=> a variable containing time info)
+        if (varname %in% names(time_list)){
+          
+          #if any of the time elements related to the variable (time_list[[varname]])
+          #are present in input_year OR input_month
+          cond_year <- any(input_year %in% time_list[[varname]], na.rm=T)
+          cond_month <- any(input_month %in% time_list[[varname]], na.rm=T)
+
+          if ((cond_year) || (cond_month)){
+            
+            #then the index is registered
+            ind <- append(ind, i)
+          }
+        }
+      }
+      
+      #the data are filtered based on that index
+      data_filtered <- data_filtered[ind,]
+    }
+    if (!is.null(input_theme)) data_filtered <- data_filtered %>% filter(Theme %in% input_theme)
+    if (!is.null(input_source)) data_filtered <- data_filtered %>% filter(Source %in% input_source)
+    if (!is.null(input_res)) data_filtered <- data_filtered %>% filter(Resolution %in% input_res)
+    
+    ### this section creates multiple select inputs nested INSIDE the dataframe
+    #iterating over rows
+    for (i in 1:nrow(data_filtered)){
+      
+      #getting the variable name
+      varname <- data_filtered$Variable[i]
+      
+      #creating the ID of the future mselect input
+      input_name <- paste0("mselect_",tab,"_",varname)
+      
+      #the choices of those inputs are directly found in time_list
+      choices <- time_list[[varname]]
+      
+      #if the variable has no time info, NA will replace the mselect input
+      if (is.null(choices)) data_filtered$Time[i] <- NA
+      
+      #if the variable has time info, the mselect input widget fills data_filtered$Time[i]
+      else { 
+        
+        #the time range is extracted from the data (csv file)
+        range <- data_filtered$Time[i]
+        
+        #initializing the widget with a vector
+        widget <- c('<select id="',input_name,'" class="form-control" multiple="multiple" style="width:150px">')
+        
+        #(if the current element is a month and if there is no input for the month filter) OR
+        #(if the current element is a year and if there is no input for the year filter)
+        if (((substr(choices[1],1,1) %in% LETTERS) && (is.null(input_month))) ||
+            (!(substr(choices[1],1,1) %in% LETTERS) && (is.null(input_year)))){
+          
+          #then the time range is put as the default selected option
+          widget <- append(widget, c('<option value="',range,'"selected>',range,'</option>'))
+        } else {
+          
+          #otherwise no. The default selected option will correspond to the filter value
+          widget <- append(widget, c('<option value="',range,'">',range,'</option>'))
+        }
+        
+        #looping over choices / options
+        for (choice in choices){
+          
+          #if the particular year/month had been selected has a filter, then it becomes the default option (in the mselect input)
+          if (choice %in% c(input_year, input_month)) widget <- append(widget, c('<option value="',choice,'"selected>',choice,'</option>'))
+          else widget <- append(widget, c('<option value="',choice,'">',choice,'</option>'))
+        }
+        
+        widget <- append(widget, c('</select>'))
+        
+        #converting the vector to a single character chain, and let it fill the time column
+        data_filtered$Time[i] <- paste(widget, collapse='')
+      }
+    }
+  
+    data_filtered
+  })
+  
+  #rendering the datatable, from data_filtered()
+  rendered_table <- DT::renderDataTable({
+    
+    data <- data_filtered() #getting the reactive data_filtered()
+
+    dtable <- datatable(
+      
+      data = data, 
+      escape = FALSE, #allows to create the mselect inputs 
+      selection = 'none', #skipping DT's original selection system to use the extension
+      extension =c('Select', 'Buttons'), #using the Select and Buttons extensions of DT
+      class = "hover cell-border",
+      rownames = FALSE,
+      
+      #allows to make checkboxes work
+      callback = JS(c(
+        "table.on('select', function(e, dt, type, indexes){",
+        "  if(type === 'row'){",
+        "    Shiny.setInputValue('selectedRow', indexes);",
+        "  }",
+        "});"
+      )),
+      
+      options = list(
+        pageLength = nrow(data), #several pages would lead to problems with the mselect inputs
+        
+        #creates checkboxes for variable selection
+        columnDefs = list(
+          list(targets = 0, orderable = FALSE, className = "select-checkbox")
+          ),
+        
+        #selection options
+        select = list(
+          style = "os", selector = "td:first-child"),
+
+        dom = 'Blfrtip',
+        rowId = 0,
+        buttons = c('selectAll', 'selectNone'), #adding selectAll and deselectAll buttons
+        searchHighlight = TRUE,
+        orderClasses = TRUE,
+       
+        initComplete = JS(c("function(settings, json) {",
+                            #turns the select inputs to mselect inputs (for multiple selection)
+                           "  $('[id^=mselect]').selectize();", 
+                           #color for the datatable header
+                           "  $(this.api().table().header()).css({'background-color': '#7DD9BA', 'color': '#fff'});","}")),
+        
+        #managing the binding between shiny's inputs and javascript's
+        preDrawCallback = JS('function() { Shiny.unbindAll(this.api().table().node()); }'),
+        drawCallback = JS('function() { Shiny.bindAll(this.api().table().node()); } ')))
+
+    #dtable is the rendered object
+    dtable
+    
+    }, server = FALSE 
+    )
+  
+
+  determine_time_tag <- function(selected_time, timeunit){
+    # Function that creates the time tag for the selected time (year, month, each 16 days) in
+    # case the selected_time vector contains several elements, formatting them properly
+    # Inputs : selected_time : character vector indicating the selected time (months, years)
+    #                          from the nested mselect inputs
+    #          timeunit : character indicating the nature of the time (year, month, each 16 days)
+    # Outputs : time_tag 
+    
+    #based on timeunit, a chronological list is computed
+    if (timeunit=='month') list <- c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+    else if (timeunit=='year') list <- as.character(2000:3000)
+    else { 
+      list <- c()
+      for (year in 2000:3000){
+        timeseq <- paste0(as.character(year), str_pad(seq(1,353,16), 3, pad = "0"))
+        list <- append(list, timeseq)
+      }
+    }
+    
+    #getting the indices of the selected_time vector present in the list
+    match <- match(selected_time, list)
+    
+    #sorting the times (according to the list)
+    selected_time <- list[sort(match)] 
+    match <- sort(match)
+    
+    #this logical vector will indicate whether time elements in selected_unit are
+    #consecutive or not
+    difference <- diff(match) == 1
+    
+    #initializing with empty vector
+    time_tag <- c()
+    
+    #To make it simple, the following section will iterate over elements of selected_time,
+    #appending them to time_tag. However, whenever some elements are consecutive, they will
+    #be appended with a more compact form -> instead of 2012_2013_2014_2015, it will be 2012-2015
+    
+    i <- 1
+    while (i <= length(selected_time)){ #iterating over selected time elements
+      
+      time_tag <- append(time_tag, selected_time[i]) #appending the time to time_tag
+      sig <- F #sig = signal whether elements are consecutive, initialized to F
+      
+      #testing if the current element is consecutive to the next
+      while((difference[i]) && (i<=length(difference))){
+        #if so, iterating continues (i increases), until the condition is not met
+        #basically, it's skipping the in-between years (between start and stop)
+        i <- i + 1
+        sig <- T #sig becomes TRUE
+      }
+      
+      #if the program went into the while loop above
+      if (sig){
+        time_tag <- append(time_tag, '-')
+        time_tag <- append(time_tag, selected_time[i])
+        #the time_tag will get something like 2010-2015 for example
+      }
+      
+      i <- i + 1
+    }
+    
+    #converting the vector to a single character
+    time_tag <- paste0(time_tag, collapse='_')
+    
+    #removing those '_-_' introduced to the tag during the while loops
+    time_tag <- gsub('_-_', '-', time_tag)
+
+    return(time_tag)
+  }
+  
+  conditional_time_tag <- function(selected_time){
+    # Function that determines the time tag for the selected time
+    # Inputs : selected_time : character vector indicating the selected time(s) (months, years)
+    #                          from the nested mselect inputs
+    # Outputs : time_tag 
+    
+    #if the mselect input was empty
+    if (is.null(selected_time)){
+      time_tag <- '_all' #this 'all" tag will indicate that all possible times will later be extracted for the variable
+      
+    #"no_time" indicates that the variable as no time information
+    } else if (selected_time == 'no_time'){
+      time_tag <- ''
+      
+    #if only one element was selected
+    } else if (length(selected_time)==1){
+      time_tag <- selected_time
+      time_tag <- paste0('_',time_tag) #the time tag will consist in just that element
+      
+    #if several elements were selected (calls to the determine_time_tag function)
+    } else if (length(selected_time)>1) {
+      
+      #if they are months
+      if (substr(selected_time[1],1,1) %in% LETTERS){
+        time_tag <- determine_time_tag(selected_time, timeunit='month')
+        
+      #if they are years
+      } else if (nchar(selected_time[1])==4){
+        time_tag <- determine_time_tag(selected_time, timeunit='year')
+        
+      #if they are "each 16 days" elements
+      } else {
+        time_tag <- determine_time_tag(selected_time, timeunit='each_16_days')
+      }
+      time_tag <- paste0('_',time_tag)
+    }
+    
+    time_tag <- gsub(', ', '_', time_tag) #removing potential commas
+    return(time_tag)
+  }
+  
+  #Upon checking any row in the datatable, the selected variable go to the
+  #"selected variables" select input (note: reacts to the select all button)
+  observeEvent(input[[paste0("dynamic_datatable_", tab, "_rows_selected")]], {
+    
+    #index(es) of the selected row(s)
+    row_ind <- input[[paste0("dynamic_datatable_", tab, "_rows_selected")]]
+    
+    #name(s) of the selected row(s)
+    varname <- data_filtered()[row_ind, "Variable"]
+
+    #time selection for the selected variable(s)
+    selected_time <- c()
+    reactive_list <- reactiveValuesToList(input)
+    
+    #for each selected variable
+    for (v in varname){
+      
+      #if the variable has no time information (no associated mselect input widget)
+      if(!(paste0("mselect_",tab,"_",v) %in% names(reactive_list))) s <- 'no_time'
+      else s <- input[[paste0("mselect_",tab,"_",v)]]
+      selected_time <- append(selected_time, list(s))
+    }
+
+    #computing a time tag depending on time selection
+    time_tag <- sapply(selected_time, conditional_time_tag)
+
+    #paste the variable name and time tag together
+    varname_and_time <- paste0(varname, time_tag)
+    
+    #varname_and_time is appended to the global list of selected variables
+    selected_vars_list <<- append(selected_vars_list, varname_and_time)
+
+    #the "selected variables" select input is updates with the new list
+    updateSelectInput(session, inputId = paste0("input_selected_vars_", tab), 
+                      choices = selected_vars_list, 
+                      selected = selected_vars_list)
+  })
+  
+  #Whenever a selected variable is manually removed by the user (in the select input),
+  #selected_vars_list is also updated
+  observe({
+    select_input_content <- input[[paste0("input_selected_vars_", tab)]]
+    
+    selected_vars_list_u <- unique(selected_vars_list)
+    diff <- setdiff(selected_vars_list_u, select_input_content)
+
+    if (length(diff)){
+      selected_vars_list <<- selected_vars_list_u[selected_vars_list_u != diff]
+    }
+
+  })
+    
+  #Upon activation of the Clear button, selected_vars_list is cleared and the 
+  #select input is updated with an empty character
+  observeEvent(input[[paste0("clear_selected_vars_",tab)]], {
+    
+    selected_vars_list <<- c()
+    
+    updateSelectInput(session, inputId = paste0("input_selected_vars_", tab), 
+                      choices = character(0), 
+                      selected = character(0))
+  })
+  
+  return(list(section=section, rendered_table=rendered_table))
 }
 
-#Managing variable selection
-output$variableSelectCoord <- renderUI({
-  req(surveydata_coord())
+#instructions to pass to the varSelectionSection function
+instructionsVarSelectCoord <- "<p class = 'textbox'> Now, select the geospatial variables you want extracted for your data. You can apply some filters to the table. To select a variable, click on its checkbox. You can choose between different time observations in the 'Time' column. If you want to choose all variables at once, click on the 'Select all' button. The selected variables will be shown in the 'Selected variables' field.</p>"
+
+# Variable selection for the select coord section
+res_coord <- varSelectionSection(tab="coord",
+                           instructions=instructionsVarSelectCoord,
+                           country=country())
+#outputs
+output$varSelectCoord <- res_coord$section
+output$dynamic_datatable_coord <- res_coord$rendered_table
+
+get_raster_file <- function(selected_vars, country){
+  # Function that gets a list of paths to raster files, from what's in the "selected variables" select input
+  # Inputs : selected_vars : list of variables with time tags, coming from the select input
+  #          country : character indicating the chosen country
+  # Output : raster_files : vector of paths to raster files
   
-  #the output here is rendered as a tag list
-  tags <- tagList()
+  #getting the data
+  data <- isolate(read.csv(paste0("Data/", country, "/", country, "_variables.csv")))
   
-  #Title and instructions for the selection of variables
-  tags[[1]] <- fluidRow(style = "background-color:#FFFFFF;", br())
-  tags[[2]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1,  br(h1("Geospatial variables selection"))))
-  tags[[3]] <- fluidRow(style = "background-color:#FFFFFF;", br(), column(width = 8, offset = 1, HTML("<p class = 'textbox'> Now, select the geospatial variables you want extracted for your data. The variables are sorted by sources and resolutions, and they can be selected by checking the box next to them. For variables with multiple time observations available, you can select any you want by clicking on the input bar.</p>")))
-  tags[[4]] <- fluidRow(style = "background-color:#FFFFFF;", br())
+  #splitting the character vector by '_' (separating varname and time elements)
+  split_ <- base::strsplit(selected_vars, '_')
   
-  #listing the available sources
-  src <- list.dirs(paste0("Data/", country()), recursive = FALSE, full.names = FALSE)
+  #getting varnames, first elements of the list
+  varname <- sapply(split_, '[[', 1)
   
-  #for each source, call to the getVarBox function, to create the checkbox
-  box <- lapply(src, getVarBox, country = country(), tab = "coord")
-  
-  i <- 1
-  #iterating over the box list, with the following condition:
-  while(i+2 <= length(box)){ #controls the display of boxes (rows of 3 boxes)
+  #iterating over the split_
+  for (k in 1:length(split_)){
     
-     tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", 
-                                        
-                                        column(width = 3, offset = 1, box[[i]]), #box 1
-                                        column(width = 3, box[[i+1]]), #box 2
-                                        column(width = 3, box[[i+2]])) #box 3
-     i <- i+3
+    #content of the list ([varname,time1,time2 etc])
+    var <- split_[[k]]
+    
+    #if the selected var contains time information
+    if (length(var)>1){
+      
+      #iterating over time elements
+      for (i in 2:length(var)){
+        time <- var[i]
+        
+        #if the time element is a time range (2010-2015 for example)
+        if (grepl('-', time)){
+          
+          #splitting by '-' and getting the start and stop elements
+          split_time <- unlist(base::strsplit(time, '-'))
+          start <- split_time[1]
+          stop <- split_time[2]
+          
+          #if the elements are months 
+          if (substr(start, 1, 1) %in% LETTERS){
+            
+            #getting the corresponding time range (ex: replacing January-March to January February March)
+            list_months <- c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October","November", "December")
+            mstart <- match(start, list_months)
+            mstop <- match(stop, list_months)
+            time_range <- list_months[mstart:mstop]
+            
+          #if they are years  
+          } else if (nchar(start)==4) {
+              time_range <- as.character(as.numeric(start):as.numeric(stop))
+              
+          #if they are "each 16 days" elements    
+          } else {
+            
+              list_16 <- c()
+              for (year in 2000:3000){
+                timeseq <- paste0(as.character(year), str_pad(seq(1,353,16), 3, pad = "0"))
+                list_16 <- append(list_16, timeseq)
+              }
+              mstart <- match(start, list_16)
+              mstop <- match(stop, list_16)
+              time_range <- list_16[mstart:mstop]
+          }
+          split_[[k]] <- append(split_[[k]], time_range)
+        }
+      }
+    }
   }
   
-  #dealing with remaining boxes that did not make a complete row of 3
-  if (i < length(box)){
-    tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", 
-                                       column(width = 3, offset = 1, box[[i]]), 
-                                       column(width = 3, box[[i+1]]))}
-  if(i == length(box)){
-    tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", 
-                                       column(width = 3, offset = 1, box[[i]]))}
-  
-  tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", br())
-  
-  #Extract action button
-  tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, actionButton("coordextractbutton", h3("Extract"), icon("table"), class = "btn-outline-success btn-lg")))
-  
-  tags #"returning" the rendered tag list
-})
+  #getting vectors of the source and resolution of selected variables
+  src_list <- data[match(varname, data$Variable.Name), "Source.Name"]
+  res_list <- data[match(varname, data$Variable.Name), "Resolution"]
 
+  raster_files <- c() #empty vector for initialization
+  
+  #getting the names of the sources, as found in the folder
+  #(because those names are different than those present in the csv file)
+  src <- list.dirs(paste0("Data/", country), full.names = FALSE)[-1]
+  src_names <- src[!grepl("/", src)]
+
+  #iterating over the selected variables list
+  for (i in 1:length(split_)){
+    
+    var <- split_[[i]]
+    
+    #getting the corresponding source and resolution
+    src <- src_names[which(sapply(src_names, function(x){grepl(x, src_list[i])}))]
+    res <- res_list[i]
+    
+    #if there's no time information
+    if (length(var)==1){
+      raster_files <- append(raster_files, 
+                             paste0("Data/", country, "/", src, "/", res, "/", var[1], ".tif"))
+      
+    #if there's all, select files for all times possible
+    } else if (var[2]=='all') {
+      files <- list.files(paste0("Data/", country, "/", src, "/", res, "/", var[1]), full.names = T)
+      raster_files <- append(raster_files, files)
+      
+    #if there's time information
+    } else {
+
+      #iterating over time elements
+      for (k in 2:length(var)){
+        time <- var[k]
+        
+        #if the element is a time range (2012-2018 for example)
+        if (!grepl('-', time)){
+          
+          #if they are months
+          if (substr(time, 1, 1) %in% LETTERS){
+            raster_files <- append(raster_files, 
+                                 paste0("Data/", country, "/", src, "/", res, "/", var[1], "/", var[1], tolower(substr(time, 1, 3)),'.tif'))
+            
+          #if they are years or "each 16 days" elements
+          } else {
+            raster_files <- append(raster_files, 
+                                   paste0("Data/", country, "/", src, "/", res, "/", var[1], "/", var[1], time,'.tif'))
+          }
+        }
+      }
+    }
+  }
+  return(raster_files)
+}
 
 ### Extracting the chosen geospatial variables for the loaded GPS coordinates ###
 #Upon activation of the extract button : extracting the values of the chosen variables for the GPS coordinates
 geoDataCoord <- eventReactive(input$coordextractbutton, {
+  
   #initializing the loading bar
   progress <-  Progress$new()
   progress$set(message = "Please wait.", value = 0)
-
+  
   #Getting the variables that were checked and putting them in a list
-  vars <- unname(unlist(isolate(reactiveValuesToList(input))[grepl("coordvar", names(input))])) 
-  
-  #Getting the resolutions of these variables
-  res <- factor(unlist(lapply(vars, function(x){ slash <- gregexpr("/", x)[[1]]                   
-  substr(x, slash[3]+1, slash[4]-1 )})))
-  
+  vars <- get_raster_file(isolate(input$input_selected_vars_coord), country())
   data <- surveydata_coord() #processed data from the csv
   extracted <- list()
   
@@ -486,10 +1066,13 @@ geoDataCoord <- eventReactive(input$coordextractbutton, {
   # variables of the same resolution were grouped and stacked together 
   # although they had different extents, which generated an error (issue n°7)
   for (i in 1:length(vars)){
+
+    if (file.exists(vars[[i]])){
+      #key step : extracting the extracting the values of the chosen variables for the GPS coordinates (raster package)
+      extracted[[i]] <- raster::extract(raster::stack(vars[[i]]), data)
+      progress$inc(1/length(vars), detail = paste('Extracting',vars[[i]]))
+    } else print(paste(vars[[i]], 'doesnt exist'))
     
-    #key step : extracting the extracting the values of the chosen variables for the GPS coordinates (raster package)
-    extracted[[i]] <- raster::extract(raster::stack(vars[[i]]), data)
-    progress$inc(1/length(vars), detail = paste('Extracting',vars[[i]]))
   }
   
   #closing the progress widget
@@ -677,7 +1260,7 @@ output$unitchoice <- renderUI({
   tags[[2]] <- fluidRow(style = "background-color:#FFFFFF;", br())
   
   #Instructions for the AU selection : You can now pick the administrative units ...
-  tags[[3]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1, HTML("<p class = 'textbox'>You can now pick the administrative units you want by selecting them through the dropdown menus and clicking the Add Unit button. As you add units to your selection, they will also appear on the map.</p>")))
+  tags[[3]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1, HTML("<p class = 'textbox'>You can now pick the administrative units you want by selecting them through the dropdown menus and clicking the Add Unit button. As you add units to your selection, they will also appear on the map.</br> You can choose to upload a list of administrative units from a csv file (in that case, mind the spelling of units and the file format). You can also save the units to a csv file for future reuse.</p>")))
   
   tags[[4]] <- fluidRow(style = "background-color:#FFFFFF;", br())
   
@@ -755,6 +1338,7 @@ output$unitchoice <- renderUI({
   tags
 })
 
+#downloads the selected administrative units to a csv file
 output$downloadSelectedAU <- downloadHandler(
   filename = function() {
     paste0("AdminUnitSelection.csv")
@@ -943,92 +1527,47 @@ output$unitsMap <- renderLeaflet({
                                             style = list("color" = "#DA302C","font-family" = "serif","box-shadow" = "3px 3px rgba(0,0,0,0.25)","font-size" = "12px","border-color" = "rgba(0,0,0,0.5)")))
 })
 
+instructionsVarSelectUnit <- "<p class = 'textbox'> Now, select the geospatial variables you want extracted for your data. You can apply some filters to the table. To select a variable, click on its checkbox. You can choose between different time observations in the 'Time' column. If you want to choose all variables at once, click on the 'Select all' button. The selected variables will be shown in the 'Selected variables' field.</br> Then click on the statistics you would want computed for your administrative units.</p>"
+
 #Gives the choice of variables to the user, like in the GPS coordinates page and also the statistics they want for these variables
-output$variableSelectUnit <- renderUI({
-  req(units())
+selected_vars_list <- c() 
   
-  #the output here is rendered as a tag list
-  tags <- tagList()
-  tags[[1]] <- fluidRow(style = "background-color:#FFFFFF;", br())
-  
-  #Title : Geospatial variables selection
-  tags[[2]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1,  br(h1("Geospatial variables selection"))))
-  
-  #Instructions : Now, select the geospatial variables...
-  tags[[3]] <- fluidRow(style = "background-color:#FFFFFF;", br(), column(width = 8, offset = 1, HTML("<p class = 'textbox'> Now, select the geospatial variables you want extracted for your data. The variables are sorted by sources and resolutions, and they can be selected by checking the box next to them. For variables with multiple time observations available, you can select any you want by clicking on the input bar. For administrative units, the returned data represents statistics which have been computed on all the raster cells present in that unit. For that reason, you also have to select which one of these statistics you want to have.</p>")))
-  
-  tags[[4]] <- fluidRow(style = "background-color:#FFFFFF;", br())
-  
-  #listing the available sources
-  src <- list.dirs(paste0("Data/", input$countrySelectUnit), recursive = FALSE, full.names = FALSE)
-  
-  #for each source, call to the getVarBox function, to create the checkbox
-  box <- lapply(src, getVarBox, country = input$countrySelectUnit, tab = "unit")
-  
-  #iterating over the box list, with the following condition:
-  i <- 1 
-  while(i+2 <= length(box)){#controls the display of boxes (rows of 3 boxes)
-    tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, box[[i]]), column(width = 3, box[[i+1]]), column(width = 3, box[[i+2]]))
-    i <- i+3
-  }
-  
-  #dealing with remaining boxes that did not make a complete row of 3
-  if(i < length(box)){
-    tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", 
-                                       column(width = 3, offset = 1, box[[i]]), 
-                                       column(width = 3, box[[i+1]]))
-  }
-  
-  if(i == length(box)){
-    tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", 
-                                       column(width = 3, offset = 1, box[[i]]))
-  }
-  
-  tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", br())
-  
-  #choice of the statistics
-  tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 11, offset = 1, checkboxGroupInput("stats", label = h3("Choose statistics"), inline = TRUE, choiceValues = list("min", "max", "mean", "quantile", "median", "variance", "stdev"), choiceNames = list(h4("Min"), h4("Max"), h4("Mean"), h4("First and third quartile"), h4("Median"), h4("Variance"), h4("Standard Deviation")) )))
-  
-  tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", br())
-  
-  #extract button
-  tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, actionButton("unitextractbutton", h3("Extract"), icon("table"), class = "btn-outline-success btn-lg")))
-  
-  tags
-})
+res_unit <- varSelectionSection(tab="unit",
+                           instructions=instructionsVarSelectUnit,
+                           country=input$countrySelectUnit)
+
+output$varSelectUnit <- res_unit$section
+output$dynamic_datatable_unit <- res_unit$rendered_table
 
 #Extracts the chosen statistics for the chosen geospatial variables for each of the chosen administrative units
 geoDataUnit <- eventReactive(input$unitextractbutton, {
   stats <- req(input$stats)
   chosenUnits <- req(chosenUnits())
-  
+
   #initializing the loading bar
   progress <-  Progress$new()
   progress$set(message = "Please wait.", value = 0)
-  progress$inc(1/1, detail = "Extracting...")
-  
+
   #Getting the variables that were checked and putting them in a list
-  vars <- unname(unlist(isolate(reactiveValuesToList(input))[grepl("unitvar", names(input))]))
+  vars <- get_raster_file(isolate(input$input_selected_vars_unit), input$countrySelectUnit)
+
+  extracted <- list()
   
-  #Getting the resolutions of these variables
-  res <- factor(unlist(lapply(vars, function(x){ slash <- gregexpr("/", x)[[1]] 
-  
-  substr(x, slash[3]+1, slash[4]-1 )})))
-  vars_res <- list()
-  for(l in levels(res)){
-    vars_res[[l]] <- vars[res==l]   #Separating the variables per resolution to know which ones to stack together
+  for(i in 1:length(vars)){
+    
+    progress$inc(1/length(vars), detail = paste('Extracting',vars[[i]]))
+    
+    if (file.exists(vars[[i]])){
+      values <- list()
+      for(j in seq_len(length(chosenUnits))){
+        values[[j]] <- exact_extract(raster::stack(vars[[i]]), chosenUnits[[j]], fun = stats, full_colnames = TRUE, quantiles = c(0.25, 0.75))
+      }
+      
+      extracted[[i]] <- do.call("rbind", values)
+    } else print(paste(vars[[i]], 'doesnt exist'))
+    
   }
-  
-  stacks <- list()
-  for(i in seq_len(length(levels(res)))){
-    ras <- raster::stack(vars_res[[i]])
-    values <- list()
-    for(j in seq_len(length(chosenUnits))){
-      values[[j]] <- exact_extract(ras, chosenUnits[[j]], fun = stats, full_colnames = TRUE, quantiles = c(0.25, 0.75))
-    }
-    stacks[[i]] <- do.call("rbind", values)
-  }
-  table <- do.call("cbind", stacks)
+  table <- do.call("cbind", extracted)
   row.names(table) <- names(chosenUnits)
   
   #closing progress widget
@@ -1109,7 +1648,7 @@ output$downloadUnit <- renderUI({
     
     #Instructions : "You can choose to export the extracted.."
     fluidRow(style = "background-color:#FFFFFF;", br(), 
-             column(width = 8, offset = 1, HTML("<p class = 'textbox'> You can choose to export the extracted data as a CSV. The CSV you obtain will be the summary table you can see above.</p>"))),
+             column(width = 8, offset = 1, HTML("<p class = 'textbox'> You can choose to export the extracted data as a CSV. The CSV you obtain will be the summary table you can see above. You can choose to include the chosen administrative units in the output file.</p>"))),
     
     fluidRow(style = "background-color:#FFFFFF;", br()),
     
