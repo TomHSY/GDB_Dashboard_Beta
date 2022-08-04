@@ -15,7 +15,7 @@ library(exactextractr)
 library(readxl)
 library(rgeos)
 library(stringr)
-
+library(shinyBS)
 
 ## Laterite colors for graphs
 laterite_1 <- c("#D6EDD8", "#7DD9BA", "#ABE1B9") # to be used for single-select graphs
@@ -23,22 +23,101 @@ laterite_2 <- c("#7DD9BA") # to be used for multiple-select graphs
 laterite_3 <- c("#DA302C", "#F27317", "#241F21") # to be used for multiple-select LINE graphs (over time)
 laterite_maps <- c("#7DD9BA") # to be used for bubbles in maps
 
+##Value cards -------------------------------------
+blackcard <- function(blkcrdtitle, blkcrdtxt){
+  HTML(
+    paste0('<div class="card text-white bg-primary mb-3" style="max-width: 30rem;">
+             <div class="card-body">
+              <h4 class="card-title">', blkcrdtitle, '</h4>
+              <p class="card-text">', blkcrdtxt, '</p>
+          </div>
+        </div>'
+    )
+  )
+}
+greencard <- function(greentitle, greendtxt){
+  HTML(
+    paste0('<div class="card text-white bg-success mb-3" style="max-width: 30rem;">
+             <div class="card-body">
+             <h4 class="card-title">', greentitle, '</h4>
+             <p class="card-text">', greendtxt,'</p>
+        </div>
+      </div>'
+    )
+  )
+}
 
 #-------------------------------------------------------------------------------
 # User Interface Elements-------------------------------------------------------
 #-------------------------------------------------------------------------------
 
+#listing the GDB's countries
+files <- list.dirs("Data", full.names = FALSE)[-1]
+tmp <- files[!grepl("/", files)]
+available_countries <- tmp[tmp != 'shapes']
+ 
 ui <- fluidPage(
   
 #Title
 tags$head(tags$title("Laterite - Geospatial Data")),
-              
+
 #Social Media Icon Colors
 tags$style(".fa-facebook{color:#000000}"),
 tags$style(".fa-linkedin{color:#000000}"),
 tags$style(".fa-twitter{color:#000000}"),
 tags$style("a{color:black; font-size:13px;}"),
-tags$style(".textbox{font-size:14px; text-align:justify; border: 2px solid #DA302C; padding: 5px; box-shadow: 4px 4px 10px 2px #E8C4AA;}"),
+tags$style(".textbox{font-size:14px; text-align:justify; border: 2px solid #DA302C; padding: 5px; box-shadow: 4px 4px 10px 2px #FFFFFF;}"),
+
+#Value cards:
+tags$head(tags$style('.blackcard {
+                         width: 1000px;
+                       clear: both;
+                       /* Add shadows to create the "card" effect */
+                       box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+                       transition: 0.3s;
+                       }
+                       /*Change background color:*/
+                       .card: bg-custom-1 {
+                       background-color: #7DD9BA;
+                       }
+                       /* On mouse-over, add a deeper shadow */
+                       .card:hover {
+                       box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2);
+                       }
+                       /* Add some padding inside the card container */
+                       .container {
+                       width: 500px;
+                       padding: 2px 16px;
+                       }')),
+tags$head(tags$style('.greencard {
+                         width: 1000px;
+                       clear: both;
+                       /* Add shadows to create the "card" effect */
+                       box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+                       transition: 0.3s;
+                       }
+                       /*Change background color:*/
+                       .card: bg-custom-1 {
+                       background-color: #7DD9BA;
+                       }
+                       /* On mouse-over, add a deeper shadow */
+                       .card:hover {
+                       box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2);
+                       }
+                       /* Add some padding inside the card container */
+                       .container {
+                       width: 500px;
+                       padding: 2px 16px;
+                       }')),
+tags$head(tags$style('.textbox {
+                      background-color:#DAF0DF ;
+                      border: 1px solid #dee2e6 !important;
+                      font-family: Gotham-Medium,Verdana,sans-serif;
+                      shadow: 0 4px 8px 0 #FFFFFF !important;
+                      height:90px;
+                      padding: 15px !important;
+                      width: 1000px;}')),
+
 
 #adding javascript code to manually unbind Shiny's inputs to the datatable's inputs (see inside the data_filtered reactive)
 #https://groups.google.com/g/shiny-discuss/c/ZUMBGGl1sss/m/7sdRQecLBAAJ
@@ -46,87 +125,113 @@ tags$script(HTML("Shiny.addCustomMessageHandler('unbind-DT', function(id) {
                             Shiny.unbindAll($(document.getElementById(id)).find('.dataTable'))
                             })")),
 
-setBackgroundColor(color = "#C5E3C6"), #background color
-theme = "bootstrap_flatly.css", #css theme used
+#Link text colors
+tags$style(HTML("a{color:black}")),
+tags$style(HTML("a{font-size:13px}")), 
+setBackgroundColor(color = "#C5E3C6"), 
+tags$style(HTML(".tabbable > .nav > li > a {background-color: #DCEDDE ;  color:black}")), 
+theme = "bootstrap_flatly.css",
+
 useShinydashboard(), #"activating" the shinydashboard package
 
 
 ## Header ----------------------------------------------------------------------
 
-titlePanel(fluidRow(column(width=3, 
-                           img(src ="laterite-logo-dark.svg", 
-                               height = 70, width = 130)))),
+tags$div(
+  img(src ="laterite-logo-dark.svg", height = 50, width = 180), style='padding:1%;padding-left:3%;'),
 
 ## Body ------------------------------------------------------------------------
 
-tabsetPanel(type = c("tabs"),
+tags$head(
+  tags$style(HTML("
+      .nav li {
+        width: 18vw;
+      }
+    "))),
+
+tabsetPanel(id='tabs', type = c("tabs"),
                
                   
 ### Tab 1 : Introduction #######################################################
-tabPanel(h5(strong("Introduction")),
-         
-    #code for a line of whitespace
-    fluidRow(style = "background-color:#FFFFFF;", br()), 
+tabPanel(h4(strong("Introduction")), 
+    
+    tags$div(class="landing-wrapper",
+                  
+    # child: image
+    tags$div(class="landing-block background-content",
+    
+    img(src="geospatial_p1.jpg")
+    ),
+    
+    # child: content (that will be placed on top of the images)
+    tags$div(class="landing-block foreground-content",
+             
+    tags$div(class="foreground-text",
+                      
+       #Welcome to the dashboard
+       tags$h2(style = "font-size:30px;text-align: center;font-weight:bold", "Welcome to the Geospatial Dashboard"), 
+       
+       #Quick description of the dashboard (to remove ?)
+       tags$p(style = "font-size:20px; text-align:center; padding: 20px;font-family: Gotham-Book,Verdana,sans-serif;", 
+              "Enrich your research with the Geospatial Data Backbone !"),
+       
+       # tags$button(inputId='', label="")
+       tags$button(id="visit_help", 
+                   type="button", 
+                   class="btn action-button btn-large btn-primary", 
+                   style = "font-size:16px; font-weight:bold; color: black; background-color:#daf0df; padding: 0;border: none;outline:none;font-family: Gotham-Medium,Verdana,sans-serif;",
+                   HTML("<i class='icon-star'></i>Discover the dashboard's functionalities"))
+    )))
 
-    fluidRow(style = "background-color:#FFFFFF;", 
-             column(width = 6, offset = 3,
-                    
-                   #Welcome to the dashboard
-                   h2(style = "text-align: center;", "Welcome to the Laterite geospatial data dashboard (beta)!"), 
-                   
-                   #horizontal line
-                   hr(), 
-                   
-                   #Quick description of the dashboard (to remove ?)
-                   tags$p(style = "font-size:16px; text-align:justify; border: 2px solid #DA302C; border-radius: 25px; padding: 20px;", 
-                          "This tool will allow you to obtain data on many different geospatial variables for the four Laterite african countries. This data can be used to gain more insights on most research projects, so feel free to take a look. Geospatial data can be accessed in two ways : First, it can be accessed for specific GPS coordinates, for example ones you would get with survey data. Then, it can also be accessed for specific administrative units (e.g. regions, districts, or below) for which the resulting data is some descriptive statistics about how the geospatial variables are distributed in that unit.")))
 ), 
 
 
 
 ### Tab 2 : Variables ##########################################################
-tabPanel(h5(strong("Variables")),
+tabPanel(h4(strong("Variables")),
          
   fluidRow(style = "background-color:#FFFFFF;", br()),
   
   #Title : Variables description
-  fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1, br(h1("Variables description")))),
+  fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1, br(h1("Variables description", style="font-size:35px;font-weight:bold")))),
   
   #Instructions : Choose a country to get a description of ...
   fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1, 
-                                                       tags$p(class = "textbox", "Choose a country to get a description of all the geospatial variables that are available for that country. For each variable, you will get information such as its source, its theme and at what resolution it is available."))),
+                                                       tags$p(class = "textbox", "Get a description of all the geospatial variables that are available for a chosen country. For each variable, you will get information such as its source, theme etc. Start by choosing a country."))),
   
   fluidRow(style = "background-color:#FFFFFF;", br()),
   
   #Selecting the input country
   fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, 
-                                                       selectInput("countrySelectVar", h4("Select Country"),c("Ethiopia", "Kenya",  "Rwanda", "Uganda")))),
+                                                       selectInput("countrySelectVar", h4("Select Country"),available_countries))),
   
   #outputing the corresponding datatable
   fluidRow(style = "background-color:#FFFFFF;", column(width = 10, offset = 1, 
-                                                       DT::dataTableOutput("vardesc")))
+                                                       DT::dataTableOutput("vardesc"))),
+  fluidRow(style = "background-color:#FFFFFF;", br())
+  
   ),
 
 
 
 ### Tab 3 : From GPS coordinates ###############################################
-tabPanel(h5(strong("From GPS coordinates")),
+tabPanel(h4(strong("From GPS coordinates")), id = "coord_tab",
          
   fluidRow(style = "background-color:#FFFFFF;", br()),
   
   #Title : Loading GPS coordinates
   fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1, 
-                                                       br(h1("Loading GPS coordinates")))),
+                                                       br(h1("Select data using GPS coordinates", style="font-size:35px;font-weight:bold")))),
   
   #Instructions : Select a CSV file containing GPS coordinates for which ...
   fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1, 
-                                                       tags$p(class = "textbox", "Select a CSV file containing GPS coordinates for which you want to extract geospatial data, and the country they're situated in. Then, select the variables that represent the longitude and the latitude in your data."))),
+                                                       tags$p(class = "textbox", "Start by selecting a CSV file (or XLSX) containing the GPS coordinates for which you want to extract geospatial data, and the country they're located in. Then, select the variables that represent the longitude and the latitude in the file."))),
   
   fluidRow(style = "background-color:#FFFFFF;", br()), 
 
   #Selecting the input country
   fluidRow(style = "background-color:#FFFFFF;", column(width = 3, offset = 1, 
-                                                       selectInput("countryselect", h4("Select Country"),c("Ethiopia", "Kenya",  "Rwanda", "Uganda")))),
+                                                       selectInput("countryselect", h4("Select Country"),available_countries))),
   
   #Row containing 4 columns :
   fluidRow(style = "background-color:#FFFFFF;", 
@@ -148,6 +253,7 @@ tabPanel(h5(strong("From GPS coordinates")),
   fluidRow(style = "background-color:#FFFFFF;", 
            column(width = 10, offset = 1, conditionalPanel("input.gobtton", leafletOutput("map")))),
   
+  uiOutput('deleteCoordSection'), 
   
   uiOutput("varSelectCoord"),
   
@@ -168,17 +274,17 @@ tabPanel(h5(strong("From GPS coordinates")),
 
 
 ### Tab 4 : By administrative units ############################################
-tabPanel(h5(strong("By administrative units")), id = "unit_tab",
+tabPanel(h4(strong("By administrative units")), id = "unit_tab",
 
   fluidRow(style = "background-color:#FFFFFF;", br()),
   
   #Title : Administrative Unit Selection
   fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1, 
-                                                       br(h1("Administrative Unit Selection")))),
+                                                       br(h1("Select data using administrative units", style="font-size:35px;font-weight:bold")))),
   
   #Instructions : Select the country you're interested in and click ...
   fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1, 
-                                                       tags$p(class = "textbox", "Select the country you're interested in, and click on the 'Loads units' button. Loading shapefiles may take some time."))),
+                                                       tags$p(class = "textbox", "Start by selecting the country you're interested in, and then click on the button. Loading shapefiles may take some time."))),
   
   fluidRow(style = "background-color:#FFFFFF;", br()),
   
@@ -186,7 +292,7 @@ tabPanel(h5(strong("By administrative units")), id = "unit_tab",
   fluidRow(style = "background-color:#FFFFFF;", 
            
            #Selecting input country
-           column(width = 3, offset = 1, selectInput("countrySelectUnit",h4("Select Country"),c("Ethiopia", "Kenya",  "Rwanda", "Uganda"))), 
+           column(width = 3, offset = 1, selectInput("countrySelectUnit",h4("Select Country"),available_countries)), 
            
            #Go button
            actionButton("unitsbutton", h3("Load units"), icon("layer-group"), class = "btn-outline-success btn-lg")),
@@ -194,7 +300,7 @@ tabPanel(h5(strong("By administrative units")), id = "unit_tab",
   uiOutput("unitchoice"),
   
   fluidRow(style = "background-color:#FFFFFF;", 
-           column(width = 10, offset = 1, conditionalPanel("input.addUnitButton", leafletOutput("unitsMap")))),
+           column(width = 10, offset = 1, conditionalPanel("output.panelStatus", leafletOutput("unitsMap")))),
   
   uiOutput("varSelectUnit"),
   
@@ -205,47 +311,77 @@ tabPanel(h5(strong("By administrative units")), id = "unit_tab",
   
   #download button
   uiOutput("downloadUnit")
-  )
+
+),
 
 
+### Tab 5 : HELP ############################################
+tabPanel(value='tab_help', h4(strong("Help")),
+         fluidRow(style = "background-color:#FFFFFF;", br()),
+         
+         #Title : Administrative Unit Selection
+         fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1, 
+                                                              br(h2("Need help with the dashboard ?", style="font-size:35px;font-weight:bold")))),         
+         fluidRow(style = "background-color:#FFFFFF;", br()),
+         
+         
+         fluidRow(style = "background-color:#FFFFFF;", 
+                  column(width=12, offset=1, a("- Visit this page to read a user guide to the dashboard", href="https://docs.google.com/document/d/1vXArjlz63hbOv8WrJuI7PBDTvJGfgoh1bL03u9Xjw50/edit", style="font-family:Gotham-Medium,Verdana,sans-serif;font-size:18px"))), 
+         fluidRow(style = "background-color:#FFFFFF;", br()),
+         
+         fluidRow(style = "background-color:#FFFFFF;", 
+                  column(width=12, offset=1, a("- Visit this page to get more details about the dashboard deployment to Laterite's server", href="https://docs.google.com/document/d/1wcLW9OEubIl81VKGeCffRjI7IIejxy-cluU0lEpFxWU/edit#heading=h.r6g64brsbexm", style="font-family:Gotham-Medium,Verdana,sans-serif;font-size:18px"))), 
+         
+         
+         fluidRow(style = "background-color:#FFFFFF;", br()),
+         fluidRow(style = "background-color:#FFFFFF;", br()),
+         fluidRow(style = "background-color:#FFFFFF;", br()),
+         
+         
+
+)
 ), 
 
 ## Footer ----------------------------------------------------------------------
-fluidRow(style= "background-color:#C5E3C6;",column(width=2, br())),
-fluidRow(style= "background-color:#C5E3C6;",column(width=2, br())),
-fluidRow(style= "background-color:#C5E3C6;",column(width=2, br())),
-fluidRow(style= "background-color:#C5E3C6;",column(width=2, br())),
+fluidRow(style= "background-color:#EEF9F0;",column(width=2, br())),
+fluidRow(style= "background-color:#EEF9F0;",column(width=2, br())),
 
 #Row containing 3 columns
-fluidRow(style = "background-color:#C5E3C6;",
+fluidRow(style = "background-color:#EEF9F0;",
          
          #Laterite logo and social media
-         column(width=2, offset = 1, 
-                tags$a(href= "https://www.laterite.com/", img(src ="laterite-logo-dark.svg", height = 80, width = 150)), 
+         column(width=2,style='padding:1%;padding-left:4%;',
+                tags$a(href= "https://www.laterite.com/", img(src ="laterite-logo-dark.svg", height = 50, width = 180)), 
                 br(), 
-                tags$a(href="https://web.facebook.com/Laterite/?_rdc=1&_rdr",icon("facebook", lib = "font-awesome")), 
-                tags$a(href="https://twitter.com/LateriteAfrica", icon("twitter", lib = "font-awesome")), 
-                tags$a(href="https://www.linkedin.com/company/laterite", icon("linkedin",lib = "font-awesome"))),
+                tags$a(href="https://web.facebook.com/Laterite/?_rdc=1&_rdr",icon("facebook", lib = "font-awesome"), style='font-size:1.4em;;'), 
+                tags$a(href="https://twitter.com/LateriteAfrica", icon("twitter", lib = "font-awesome"), style='font-size:1.4em;padding:5%;'), 
+                tags$a(href="https://www.linkedin.com/company/laterite", icon("linkedin",lib = "font-awesome"), style='font-size:1.4em;padding:5%;')),
          
          #Contact us
-         column(width=2, offset = 1, 
+         column(width=2, offset = 1, style='font-family:Gotham-Book,Verdana,sans-serif;font-size:5px;',
                 br(),br(), 
-                h3(strong("Get in touch")), 
-                tags$a(href = "https://www.laterite.com/contact/", "Contact us")), 
+                h3(strong("Get in touch"), style='font-family:Gotham-Bold,Verdana,sans-serif;font-size:16px'), 
+                tags$a(href = "https://www.laterite.com/contact/", "Contact us")),
+         
+         
+         #Newsletter
+         column(width=2, style='font-family:Gotham-Book,Verdana,sans-serif;font-size:5px;',
+                br(),br(), 
+                h3(strong("Newsletter"), style='font-family:Gotham-Bold,Verdana,sans-serif;font-size:16px'), 
+                tags$a(href = "https://www.laterite.com/newsletter/", "Subscribe")), 
          
          #Laterite's motto
-         column(width = 2, offset = 2, 
+         column(width = 4,style='font-family:Gotham-Book,Verdana,sans-serif;font-size:5px;',
                 br(), br(), 
-                h3(strong("From data to policy")), 
+                h3(strong("From data to policy"), style='font-family:Gotham-Bold,Verdana,sans-serif;font-size:16px'),
                 tags$a(href="https://www.laterite.com/services/data-collection/", "Data |"), 
                 tags$a(href="https://www.laterite.com/services/research-services/", "Research |"), 
                 tags$a(href = "https://www.laterite.com/services/advisory-services/", "Advisory "))),
 
-fluidRow(style= "background-color:#C5E3C6;",column(width=2, br())),
-fluidRow(style= "background-color:#C5E3C6;",column(width=2, br())),
-fluidRow(style= "background-color:#C5E3C6;",column(width=2, br())),
-fluidRow(style= "background-color:#C5E3C6;",column(width=2, br())),
-fluidRow(style= "background-color:#C5E3C6;")
+fluidRow(style= "background-color:#EEF9F0;",column(width=2, br())),
+fluidRow(style= "background-color:#EEF9F0;",column(width=2, br())),
+fluidRow(style= "background-color:#EEF9F0;",column(width=2, br())),
+fluidRow(style= "background-color:#EEF9F0;",column(width=2, br()))
 )
 
 
@@ -256,21 +392,33 @@ fluidRow(style= "background-color:#C5E3C6;")
 server <- shinyServer(function(input, output, session) {
   
 #Introduction Page--------------------------------------------------------------
+
+#the user is re-directed to the help tab if they click on "Discover the dashboard's functionalities"
+observeEvent(input$visit_help, {
+  updateTabsetPanel(session = session, inputId = "tabs", selected = "tab_help")
+})
   
 #Variables Page-----------------------------------------------------------------
 
 #Computes the variable's table for the selected country
 output$vardesc <- DT::renderDataTable({
   
+  #fetching the data according to the selected country
+  data <- read.csv(paste0("Data/", input$countrySelectVar, "/", input$countrySelectVar, "_variables.csv"))
+  data$Source <- paste0("<a href='",data$Source.Website,"'>",data$Source.Name,"</a>")
+  data$Source.Website <- NULL
+  data$Source.Name <- NULL
+  colnames(data)[1] <- "Variable"
+  
+  
   #Call to the datatable function (DT package)
   datatable(
     
-    #fetching the data according to the selected country
-    data = read.csv(paste0("Data/", input$countrySelectVar, "/", input$countrySelectVar, "_variables.csv")), 
-    
+    data = data, 
     #other parameters
     class = "hover cell-border",
     selection = 'none',
+    escape=FALSE,
     rownames = FALSE,
     options = list(pageLength = 50,
                    
@@ -330,13 +478,15 @@ surveydata_coord <- eventReactive(input$gobtton, {
   if(input$lat != input$lon){
     
     #renames the lat/long columns
-    rename(surveydata(), lat = input$lat, lon = input$lon) %>% 
+    coord <- rename(surveydata(), lat = input$lat, lon = input$lon) %>% 
       
       #removes any other column of the table other than those 2
-      select(lon, lat) %>% 
+      dplyr::select(lon, lat) %>% 
       
       #convert them to numeric if they are character (from excel import)
       mutate_if(is.character,as.numeric)
+    
+    coord
   }
 })
 
@@ -345,19 +495,63 @@ surveydata_coord <- eventReactive(input$gobtton, {
 output$map <- renderLeaflet({
   coord <- req(surveydata_coord())
   
-  leaflet(coord) %>% 
+  #give ids to markers
+  coord$id <- paste('marker', as.character(1:nrow(coord)))
+    
+  leaflet() %>% 
     addTiles() %>% 
-    addCircleMarkers(color = "#DA302C", radius = 1, opacity = 0.5)
+    addCircleMarkers(data=coord,
+                     layerId = coord$id,
+                     color = "#DA302C", radius = 1, opacity = 0.5)
 })
 
+#initialization of the reactive value to NULL (no click)
+click <- reactiveVal(NULL)
+
+#updates the reactive value after each click
+observeEvent(input$map_marker_click, {
+  val <- input$map_marker_click
+  if(is.null(val))
+    return()
+  click(val)
+})
+
+#UI for the button allowing to delete coordinates
+output$deleteCoordSection <- renderUI({
+  req(input$gobtton)
+  click <- req(click()) #appears after clicking a marker
+
+  label <- paste0("Delete the selected coordinates : (", round(click$lat,2), ", ", round(click$lng, 2), ")")
+
+  fluidRow(style = "background-color:#FFFFFF;",
+           column(width = 10, offset = 1, actionButton("delete_coords", label)))
+})
+
+#global reactive value containing to-remove coordinates
+to_remove_coords <<- reactiveVal(data.frame(long=NA, lat=NA))
+
+#After clicking on the delete button
+observeEvent(input$delete_coords, {
+  click <- click()
+  
+  #updating map
+  leafletProxy("map") %>%
+    removeMarker(click$id)
+  
+  #adding the coordinate to the list of coordinates to remove
+  to_remove_coords(rbind(to_remove_coords(), data.frame(long=click$lng, lat=click$lat)))
+  
+  #click back to NULL
+  click(NULL)
+})
 
 #The chosen country is made into a new variable 
-country <- eventReactive(input$gobtton, {
+country_coord <- eventReactive(input$gobtton, {
   req(input$countryselect)
 })
 
 ###### Giving the choice of variables to the user
-varSelectionSection <- function(tab, instructions, country){
+varSelectionSection <- function(tab, instructions){
   # Function that returns the section for variable selection (either in the coord or unit tab).
   # It handles the dynamic datatable and the selection of variables
   # Note that any widget in this section will have an ID depending on "tab"
@@ -366,8 +560,7 @@ varSelectionSection <- function(tab, instructions, country){
   #          tab : character indicating the tab
   # Output : section : the UI section
   #          rendered_table : the rendered filtered dynamic datatable
-  
-  
+
   processTimeColumn <- function(country){
     # Function that processes the Time column for the COUNTRY_variables.csv file. From it, 
     # it extracts some information (see outputs)
@@ -431,7 +624,7 @@ varSelectionSection <- function(tab, instructions, country){
             split <- unlist(base::strsplit(time, '-'))
             start <- trimws(split[1]) #trimws removes any whitespace
             stop <- trimws(split[2])
-            
+
             #if the current element is a year (not a month)
             if (grepl("[0-9]", start)){
               
@@ -476,13 +669,18 @@ varSelectionSection <- function(tab, instructions, country){
     }
     return(list(time_list=time_list, levels_years=levels_years, levels_months=levels_months, data=data))
   }
-  
+
   #Renders the UI for the section
   section <- renderUI({
     
     #checking required values
-    if (tab == "unit") req(units())
-    else req(surveydata_coord())
+    if (tab == "unit"){
+      req(units())
+      country <- req(country_unit())
+    } else {
+      req(surveydata_coord())
+      country <- req(country_coord())
+    }
     
     #call to the processTimeColumn, to extract time information from variables
     res <- processTimeColumn(country)
@@ -493,7 +691,7 @@ varSelectionSection <- function(tab, instructions, country){
     #years/month choices available for the variables
     levels_years <- res$levels_years
     levels_months <- res$levels_months
-    
+
     #the output here is rendered as a tag list
     tags <- tagList()
     
@@ -541,7 +739,7 @@ varSelectionSection <- function(tab, instructions, country){
       tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", br())
       
       #choice of the statistics
-      tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 11, offset = 1, checkboxGroupInput("stats", label = h3("Choose statistics"), inline = TRUE, choiceValues = list("min", "max", "mean", "quantile", "median", "variance", "stdev"), choiceNames = list(h4("Min"), h4("Max"), h4("Mean"), h4("First and third quartile"), h4("Median"), h4("Variance"), h4("Standard Deviation")) )))
+      tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 11, offset = 1, checkboxGroupInput("stats", label = h3("Choose statistics"), inline = TRUE, choiceValues = list("min", "max", "mean", "quantile", "median", "variance", "stdev", "sum"), choiceNames = list(h4("Min"), h4("Max"), h4("Mean"), h4("First and third quartile"), h4("Median"), h4("Variance"), h4("Standard Deviation"), h4("Sum")) )))
     }
     
     tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", br())
@@ -552,13 +750,23 @@ varSelectionSection <- function(tab, instructions, country){
     tags #"returning" the rendered tag list
   })
   
+
+  determine_go_btton <- function(tab){
+    switch(tab, "unit"="unitsbutton", "coord"="gobtton")
+  }
+
+
   #Upon activation of the filterGo button, the data are filtered
-  data_filtered <- eventReactive(list(input[[paste0("filterGo_",tab)]], input$unit_tab),{
+  data_filtered <- eventReactive(list(input[[paste0("filterGo_",tab)]],
+                                      input[[paste0(tab,"_tab")]],
+                                      input[[determine_go_btton(tab)]]),{
+    if (tab=='unit') country <- req(country_unit())
+    else country <- req(country_coord())
     
-    #each time the data is filtered, shiny's inputs are unbound from those nested
+    #each time the data are filtered, shiny's inputs are unbound from those nested
     # inside the datatable (the multiple select inputs) (see line 45)
     session$sendCustomMessage('unbind-DT', paste0('dynamic_datatable_',tab))
-    
+
     #call to the processTimeColumn function
     res <- processTimeColumn(country)
     
@@ -572,12 +780,15 @@ varSelectionSection <- function(tab, instructions, country){
     #initial column that will contain checkboxes
     data$Check <- rep(" ", times=nrow(data))
     
+    #include link in source column
+    data$Source <- paste0("<a href='",data$Source.Website,"'>",data$Source.Name,"</a>")
+
     #reordering columns
-    col_order <- c("Check", "Variable.Name", "Description", "Time", "Theme", "Source.Name", "Resolution")
+    col_order <- c("Check", "Variable.Name", "Description", "Time", "Theme", "Source.Name", "Source", "Resolution")
     data_filtered <- data[, col_order]
     
     #renaming columns
-    names(data_filtered) <- c("Check", "Variable", "Description", "Time", "Theme", "Source", "Resolution")
+    names(data_filtered)[2] <- "Variable"
     
     #the Variable/Time column is converted to character
     data_filtered$Variable <- as.character(data_filtered$Variable)
@@ -620,9 +831,10 @@ varSelectionSection <- function(tab, instructions, country){
       data_filtered <- data_filtered[ind,]
     }
     if (!is.null(input_theme)) data_filtered <- data_filtered %>% filter(Theme %in% input_theme)
-    if (!is.null(input_source)) data_filtered <- data_filtered %>% filter(Source %in% input_source)
+    if (!is.null(input_source)) data_filtered <- data_filtered %>% filter(Source.Name %in% input_source)
     if (!is.null(input_res)) data_filtered <- data_filtered %>% filter(Resolution %in% input_res)
     
+    data_filtered$Source.Name <- NULL
     ### this section creates multiple select inputs nested INSIDE the dataframe
     #iterating over rows
     for (i in 1:nrow(data_filtered)){
@@ -919,11 +1131,11 @@ instructionsVarSelectCoord <- "<p class = 'textbox'> Now, select the geospatial 
 
 # Variable selection for the select coord section
 res_coord <- varSelectionSection(tab="coord",
-                           instructions=instructionsVarSelectCoord,
-                           country=country())
+                           instructions=instructionsVarSelectCoord)
 #outputs
 output$varSelectCoord <- res_coord$section
 output$dynamic_datatable_coord <- res_coord$rendered_table
+
 
 get_raster_file <- function(selected_vars, country){
   # Function that gets a list of paths to raster files, from what's in the "selected variables" select input
@@ -1058,8 +1270,24 @@ geoDataCoord <- eventReactive(input$coordextractbutton, {
   progress$set(message = "Please wait.", value = 0)
   
   #Getting the variables that were checked and putting them in a list
-  vars <- get_raster_file(isolate(input$input_selected_vars_coord), country())
+  vars <- get_raster_file(isolate(input$input_selected_vars_coord), country_coord())
   data <- surveydata_coord() #processed data from the csv
+
+  to_remove_coords <- to_remove_coords()
+  surveydata <- surveydata()
+
+  #if the user chose to remove some coordinates by clicking on the map
+  if (nrow(to_remove_coords)>1){
+    to_remove_coords <- to_remove_coords[-1,] #removing the NAs for init
+
+    ind_lat <- rownames(data)[which(data$lat==to_remove_coords$lat)]
+    ind_long <- rownames(data)[which(data$lon==to_remove_coords$long)]
+    ind <- as.numeric(intersect(ind_lat, ind_long))
+    
+    data <- data[-ind,]
+    surveydata <- surveydata[-ind,]
+  }
+
   extracted <- list()
   
   # update : each variable is now processed individually. In the previous version, 
@@ -1077,9 +1305,9 @@ geoDataCoord <- eventReactive(input$coordextractbutton, {
   
   #closing the progress widget
   progress$close()
-  
+
   #merging the original survey data with the variables
-  cbind(surveydata(), do.call("cbind", extracted))
+  cbind(surveydata, do.call("cbind", extracted))
 })
 
 
@@ -1100,7 +1328,7 @@ output$varrep <- renderUI({
     
     #Instructions : For each of the extracted variables ...
     fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1, 
-                                                         tags$p(class = "textbox", "For each of the extracted variables, you can check a statistical summary and an histogram of its distribution among the GPS coordinates loaded."))),
+                                                         tags$p(class = "textbox", "For each of the extracted variables, you can check a statistical summary and an histogram of its distribution among the loaded GPS coordinates."))),
     
     fluidRow(style = "background-color:#FFFFFF;", br()),
     
@@ -1152,6 +1380,30 @@ output$varplot <- renderHighchart({
 })
 
 
+includeAdminLevelsCoord <- function(geoDataCoord){
+  # Function that merges the coordinates data with the administrative info present in the shapefile
+  # Input : geoDataCoord, dataframe containing gps coordinates and geospatial variables
+  # Output : geoDataCoordPlus, dataframe containing administrative info, gps coordinates and geospatial variables
+  
+  #loading the country's shapefiles
+  units <- load_shapefiles(country_coord())
+  
+  #getting the lowest-level administrative unit data
+  unit_data <- units[[length(units)]]
+
+  #copy
+  geoDataCoord2 <- geoDataCoord
+  
+  #transfering the coordinates and the projection to geodatacoord2
+  coordinates(geoDataCoord2) <-  c(input$lon, input$lat)
+  proj4string(geoDataCoord2) <- proj4string(unit_data)
+  
+  #merging the GPS coordinates with the polygon 
+  geoDataCoordPlus <- cbind(over(geoDataCoord2, unit_data), geoDataCoord)
+  
+  return(geoDataCoordPlus)
+}
+
 ### Downloading the obtained geospatial data as a CSV ###
 
 #Download handler
@@ -1161,8 +1413,16 @@ output$downloadDataCoord <- downloadHandler(
   },
   content = function(file) {
     
-    #writing csv and replacing NAs to empty strings (issue n°8)
-    write.csv(geoDataCoord(), file, row.names = FALSE)
+    #if the user chose to include the administrative levels in the final output
+    if (input$includeLevelsGPS){
+      
+      #including the levels
+      geoDataCoordPlus <- includeAdminLevelsCoord(geoDataCoord())
+      
+      #writing csv and replacing NAs to empty strings (issue n°8)
+      write.csv(geoDataCoordPlus, file, row.names = FALSE, quote=FALSE)
+    }
+    
   },
   contentType = "text/csv"
 )
@@ -1178,55 +1438,64 @@ output$downloadCoord <- renderUI({
     fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1, br(h1("Data Exportation")))),
     
     #Instructions : You can choose to export the extracted data as a CSV ...
-    fluidRow(style = "background-color:#FFFFFF;", br(), column(width = 8, offset = 1, HTML("<p class = 'textbox'> You can choose to export the extracted data as a CSV. The CSV you obtain will be the original loaded CSV along with the variables you selected for each row.</p>"))),
+    fluidRow(style = "background-color:#FFFFFF;", br(),column(width = 8, offset = 1, HTML("<p class = 'textbox'> You can choose to export the extracted data as a CSV. The CSV you obtain will be the original loaded CSV along with the variables you selected for each row.</p>"))),
     
     fluidRow(style = "background-color:#FFFFFF;", br()),
     
     #download button
-    fluidRow(style = "background-color:#FFFFFF;", column(width = 6, offset = 1, downloadButton("downloadDataCoord", h3("Export as CSV"), class = "btn-outline-success btn-lg"))),
+    fluidRow(style = "background-color:#FFFFFF;", 
+             column(width = 6, offset = 1, downloadButton("downloadDataCoord", h3("Export as CSV"), class = "btn-outline-success btn-lg")), 
+             column(width = 10, offset = 1, checkboxInput('includeLevelsGPS', 'Include the administrative level info in the CSV'))
+    ),
     
     fluidRow(style = "background-color:#FFFFFF;", br())
   )
 })
 
+  
 
 #By administrative units Page---------------------------------------------------
+
+#The chosen country is made into a new variable 
+country_unit <- eventReactive(input$unitsbutton, {
+  req(input$countrySelectUnit)
+})
 
 #Names of the variable representing the name of the administrative units, to update if the shape files change
 unitsvarnames <- eventReactive(input$unitsbutton, { #upon activation of the units button
   
-  req(input$countrySelectUnit)
-  switch(input$countrySelectUnit, "Ethiopia" = c("REGIONNAME", "ZONENAME", "WOREDANAME"),
+  req(country_unit())
+  switch(country_unit(), "Ethiopia" = c("REGIONNAME", "ZONENAME", "WOREDANAME"),
          "Rwanda" = c("NAME_1", "NAME_2", "NAME_3", "NAME_4", "NAME_5"),
          "Kenya" = c("NAME_1", "NAME_2", "NAME_3", "NAME_4", "NAME_5"),
-         "Uganda" = c("NAME_1", "NAME_2", "NAME_3", "NAME_4") 
+         "Uganda" = c("NAME_1", "NAME_2", "NAME_3", "NAME_4"), 
+         "Tanzania" = c("ADM1_EN", "ADM2_EN", "ADM3_EN")
   )
 })
 
 #Names of the variable representing the code of the administrative units, to update if the shape files change
 unitsvarcodes <- eventReactive(input$unitsbutton, { #upon activation of the units button
   
-  req(input$countrySelectUnit)
-  switch(input$countrySelectUnit, "Ethiopia" = c("RID", "Z4ID", "WOREDANO_"),
+  req(country_unit())
+  switch(country_unit(), "Ethiopia" = c("RID", "Z4ID", "WOREDANO_"),
          "Rwanda" = c("ID_1", "ID_2", "ID_3", "ID_4", "ID_5"),
          "Kenya" = c("ID_1", "ID_2", "ID_3", "ID_4", "ID_5"),
-         "Uganda" = c("ID_1", "ID_2", "ID_3", "ID_4") 
+         "Uganda" = c("ID_1", "ID_2", "ID_3", "ID_4") , 
+         "Tanzania" = c("ADM1_PCODE", "ADM2_PCODE", "ADM3_PCODE")
   )
 })
 
-#initializing the chosen administrative levels as an empty dataframe
-chosenAdminLevels <- data.frame()
-
-#Loads the shapefiles for the selected country into the variable 'units'
-units <- eventReactive(input$unitsbutton, {
-  req(input$countrySelectUnit)
+load_shapefiles <- function(country){
+  # Function that loads a country's shapefiles to get the admin unit information
+  # Input : country : character string of the chosen country to load shapefiles from
+  # Output : the loaded adminstrative units of the country
   
-  #initializing the loading bar
+  # #initializing the loading bar
   progress <-  Progress$new()
   progress$set(message = "Please wait.", value = 0)
   
   #listing files for the country
-  levels <- list.dirs(paste0("Data/shapes/", input$countrySelectUnit))[-1]
+  levels <- list.dirs(paste0("Data/shapes/", country))[-1]
   
   units <- lapply(levels, function(l) {
     progress$inc(1/length(levels), detail = paste("Loading shapefile", l))
@@ -1238,10 +1507,15 @@ units <- eventReactive(input$unitsbutton, {
   #closing the loading widget
   progress$close()
   
-  #resetting the potential previously chosen admin levels
-  chosenAdminLevels <<- data.frame()
+  return(units)
+}
+
+#Loads the shapefiles for the selected country into the variable 'units'
+units <- eventReactive(input$unitsbutton, {
+  req(country_unit())
   
-  units
+  #function loading the country's shapefiles
+  load_shapefiles(country_unit())
 })
 
 #Creates multiple dropdown select inputs allowing the user to choose the administrative units they're interested in
@@ -1260,27 +1534,33 @@ output$unitchoice <- renderUI({
   tags[[2]] <- fluidRow(style = "background-color:#FFFFFF;", br())
   
   #Instructions for the AU selection : You can now pick the administrative units ...
-  tags[[3]] <- fluidRow(style = "background-color:#FFFFFF;", column(width = 8, offset = 1, HTML("<p class = 'textbox'>You can now pick the administrative units you want by selecting them through the dropdown menus and clicking the Add Unit button. As you add units to your selection, they will also appear on the map.</br> You can choose to upload a list of administrative units from a csv file (in that case, mind the spelling of units and the file format). You can also save the units to a csv file for future reuse.</p>")))
+  tags[[3]] <- fluidRow(style = "background-color:#FFFFFF;", 
+  column(width = 8, offset = 1, 
   
+  HTML("<p class = 'textbox'>You can now pick the administrative units you want by selecting them through the dropdown menus and clicking the Add Unit button. As you add units to your selection, they will also appear on the map. You can select all lowest-level levels. 
+  You can upload a file containing a list of to-be-selected units <a href='https://drive.google.com/drive/folders/1ZNEEqTb0bSBWKUL2nyj2DZcGeeVNzRBR?usp=sharing'>(examples)</a>
+  . You can save the selected units to a csv file.</br></p>")))
+                                                                                                 
   tags[[4]] <- fluidRow(style = "background-color:#FFFFFF;", br())
   
   #creating the selecting inputs in a list
   listUnits <- paste(names(units)[1], units[[1]][[varcodes[1]]], "-", units[[1]][[varnames[1]]], sep = " ")
   names(listUnits) <- units[[1]][[varnames[1]]] 
-  select <- list(selectInput(inputId = paste0("unit", names(units)[1]), label = h4(paste0("Select ", names(units)[1])), choices = listUnits))
+  select <- list(selectInput(inputId = paste0("unit", names(units)[1]), label = h4(paste0("Select ", names(units)[1])), choices = c("All", listUnits)))
   
   for(i in 2:length(units)){
     namevar <- varnames[i]
     codevar <- varcodes[i]
     nametopvar <- varnames[i-1]
     codetopvar <- varcodes[i-1]
+
     output[[paste0("out", names(units)[i])]] <- eval(parse(text = paste0("renderUI({
       topunit <- req(input[[paste0('unit', names(units)[", i, "-1])]])
       if((topunit != 'None') && (topunit != 'All')){
             spaces <- gregexpr(' ', topunit)[[1]]
             topunitcode <- substr(topunit, spaces[1] + 1, spaces[2] - 1)
-            
-            if(input$countrySelectUnit == 'Ethiopia'){
+
+            if(country_unit() == 'Ethiopia'){
               subunits <- base::subset(units[[", i, "]], substr(", codevar, ", 0, 2*(", i, "-1)) == topunitcode)
             } else {
               subunits <- base::subset(units[[", i, "]], ", codetopvar, " == topunitcode)
@@ -1320,10 +1600,13 @@ output$unitchoice <- renderUI({
   
   tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", 
                                      
+                                     
                                      #Add Unit Button
                                      column(width = 2, offset = 1, actionButton("addUnitButton", h4("Add unit"), icon("map-marked"), class = "btn-outline-success btn-lg")),
                                      
-                                     column(width = 3, offset = 1, fileInput("fileAUSelection", label=NULL, buttonLabel = "Upload units", accept = c("text/csv", "text/comma-separated-values,text/plain",".csv"))))
+                                     column(width = 2, offset = 1,  tipify(actionButton("selectAllUnits", label=paste0("Select all ", names(units)[length(units)],"s"), class = "btn-outline-success btn-lg"), paste0('Note : long extracting time if all are selected.'))),
+                              
+                                     column(width = 3, offset = 1, tipify(fileInput("fileAUSelection", label=NULL, buttonLabel = "Upload units", accept = c("text/csv", "text/comma-separated-values,text/plain",".csv")), 'Click to upload a csv file containing a list of to-be-selected units')))
                                             
   tags[[length(tags)+1]] <- fluidRow(style = "background-color:#FFFFFF;", br())
   
@@ -1333,7 +1616,7 @@ output$unitchoice <- renderUI({
                                      column(width = 3, offset = 1, selectInput("listChosenUnits", label = "Chosen units", choices = NULL, multiple = TRUE)),
                                      
                                      #Download units button
-                                     div(style = "margin-top:1em;", column(width = 3, downloadButton("downloadSelectedAU", label="Save the selected units"))))
+                                     div(style = "margin-top:1em;", column(width = 3, tipify(downloadButton("downloadSelectedAU", label="Save the selected units"), "Click to download the list of units present in the Chosen Units field"))))
   
   tags
 })
@@ -1341,14 +1624,23 @@ output$unitchoice <- renderUI({
 #downloads the selected administrative units to a csv file
 output$downloadSelectedAU <- downloadHandler(
   filename = function() {
-    paste0("AdminUnitSelection.csv")
+    paste0("AdminUnitSelection_",country_unit(),".csv")
   },
   content = function(file) {
-    to_write <- chosenAdminLevels[chosenAdminLevels$id %in% input$listChosenUnits,]
-    write.csv(to_write, file, row.names=FALSE)
+    
+    chosenAdminLevels <- chosenAdminLevels()
+    if (all_selected()){
+      to_write <- unique(chosenAdminLevels)
+      
+    } else {
+      to_write <- chosenAdminLevels[chosenAdminLevels$id %in% input$listChosenUnits,]
+    }
+    write.csv(to_write, file, row.names=FALSE, quote=F)
   },
   contentType = "text/csv"
 )
+
+all_selected <- reactive(any(grepl("are selected", input$listChosenUnits)))
 
 #uploads a pre-selected AU from a file
 observeEvent(input$fileAUSelection, {
@@ -1356,64 +1648,105 @@ observeEvent(input$fileAUSelection, {
   #loading the file containing the AU selection, chosen by the user
   filepath <- input$fileAUSelection$datapath
   AUSelection <- read_csv(filepath, show_col_types = FALSE)
-  chosenAdminLevels <<- AUSelection
+
+  condition_gps <- (('latitude' %in% colnames(AUSelection)) && ('longitude' %in% colnames(AUSelection)))
   
-  newchosenunits <- AUSelection$id
-  updateSelectInput(session, inputId = "listChosenUnits", choices = newchosenunits, selected = newchosenunits)
+  if (condition_gps){
+    units <- req(units())
+    varcodes <- unitsvarcodes()
+    varnames <- unitsvarnames()
+    
+    #getting the lowest-level administrative unit data
+    unit_data <- units[[length(units)]]
+    
+    GPS_data <- AUSelection
+    
+    #copy
+    GPS_data2 <- GPS_data
+    
+    #transfering the coordinates and the projection to geodatacoord2
+    coordinates(GPS_data2) <-  c("longitude", "latitude")
+    proj4string(GPS_data2) <- proj4string(unit_data)
+    
+    #merging the GPS coordinates with the polygon 
+    GPS_and_admin <- cbind(over(GPS_data2, unit_data), GPS_data)
+
+    vector <- paste0(names(units)[length(units)], ' ',
+                     GPS_and_admin[[varcodes[length(varcodes)]]],
+                     ' - ', GPS_and_admin[[varnames[length(varnames)]]])
+    
+    newchosenunits <- vector
+    updateSelectInput(session, inputId = "listChosenUnits", choices = newchosenunits, selected = newchosenunits)
+    
+  } else {
+    newchosenunits <- AUSelection$id
+    updateSelectInput(session, inputId = "listChosenUnits", choices = newchosenunits, selected = newchosenunits)
+  }
 
 })
 
-updateChosenLevels <- function(chosenAdminLevels, toAdd, units){
-  # Function that updates the dataframe of the chosen admin levels, each time the add unit button is clicked
-  # Input : chosenAdminLevels : the already selected admin levels
-  #         toAdd : the chosen unit(s) to add to the dataframe
-  #         units : loaded shapefiles of administrative units, containing data
-  # Output : the updated chosenAdminLevels dataframe
+chosenAdminLevels <- reactive({
   
-  ### for each added unit, the corresponding levels (ex: region, zone, woreda) are stored in the temporary variable chosenTmp
-  #adding the chosen unit(s) as ID of the df's elements
-  chosenTmp <- data.frame(id=toAdd)
+  units <- req(units())
+  country <- req(country_unit())
+  listChosen <- req(input$listChosenUnits)
   
-  #iterating over the admin levels (ex: region, zone, woreda)
-  for (k in 1:length(units)){
-    level <- names(units)[k]
+  chosenAdminLevels <- data.frame()
+  
+  for (item in listChosen){
     
-    #fetching the selected unit
-    level_name_and_code <- input[[paste0("unit", names(units)[k])]]
+    if (grepl("are selected", item)){
+      
+      unit_data <- units[[length(units)]]@data
+      chosenTmp <- data.frame(id=all_lowest_level)
 
-    if (level_name_and_code == "None"){
-      level_name <- "None"
-      level_code <- "None"
+      column_names <- unitsvarnames()
+      for (i in 1:length(units)){
+        chosenTmp[paste0(names(units)[i], "_name")] <- unit_data[column_names[i]]
+      }
       
     } else {
-      #extracting its name and code
-      level_name <- unlist(base::strsplit(level_name_and_code, " - "))[2]
-      level_code <- trimws(gsub(level,"",unlist(base::strsplit(level_name_and_code, " - "))[1]))
+      ### for each added unit, the corresponding levels (ex: region, zone, woreda) are stored in the temporary variable chosenTmp
+      #adding the chosen unit(s) as ID of the df's elements
+      chosenTmp <- data.frame(id=item)
+      
+      #iterating over the admin levels (ex: region, zone, woreda)
+      for (k in 1:length(units)){
+        level <- names(units)[k]
+        
+        #fetching the selected unit
+        level_name_and_code <- input[[paste0("unit", names(units)[k])]]
+        
+        if (level_name_and_code == "None"){
+          level_name <- "None"
+          
+        } else {
+          #extracting its name and code
+          level_name <- unlist(base::strsplit(level_name_and_code, " - "))[2]
+        }
+        
+        #if the user did not chose "All"
+        if (level_name_and_code != 'All'){
+          
+          #updating the df with the selected units
+          chosenTmp[,paste0(level,"_name")] <- level_name
+          
+          #if the user chose "All"
+        } else {
+          #the level names and codes are extracted from the id column. They are different from one unit to another
+          to_copy_name <- unlist(lapply(base::strsplit(chosenTmp$id, " - "), `[[`, 2))
+          chosenTmp[,paste0(level,"_name")] <- to_copy_name
+        }
+      } 
+      
     }
     
-    #if the user did not chose "All"
-    if (level_code != 'All'){
-      
-      #updating the df with the selected units
-      chosenTmp[,paste0(level,"_name")] <- level_name
-      chosenTmp[,paste0(level,"_code")] <- level_code
-      
-      #if the user chose "All"
-    } else {
-      
-      #the level names and codes are extracted from the id column. They are different from one unit to another
-      to_copy_name <- unlist(lapply(base::strsplit(chosenTmp$id, " - "), `[[`, 2))
-      to_copy_code <- trimws(gsub(level,"",unlist(lapply(base::strsplit(chosenTmp$id, " - "), `[[`, 1))))
-      
-      chosenTmp[,paste0(level,"_name")] <- to_copy_name
-      chosenTmp[,paste0(level,"_code")] <- to_copy_code
-    }
-  } 
-  
-  #merging the new chosenTmp to the old chosenAdminLevels
-  chosenAdminLevels <- rbind(chosenAdminLevels, chosenTmp)
-  return(chosenAdminLevels)
-}
+    #merging the new chosenTmp to the old chosenAdminLevels
+    chosenAdminLevels <- rbind(chosenAdminLevels, chosenTmp)
+  }
+  chosenAdminLevels
+})
+
 
 #upon activation of the addUnit button : updates the "Chosen Units" field
 observeEvent(input$addUnitButton, {
@@ -1439,25 +1772,32 @@ observeEvent(input$addUnitButton, {
     #if the user select All
     if (chosenunit == 'All'){
       
-      #importing variables
       namevar <- varnames[i+1]
       codevar <- varcodes[i+1]
-      codetopvar <- varcodes[i]
       
-      #topunit is the unit level just before the current one
-      topunit <- req(input[[paste0('unit', names(units)[i])]])
-      
-      #extracting the code of this topunit
-      spaces <- gregexpr(' ', topunit)[[1]]
-      topunitcode <- substr(topunit, spaces[1] + 1, spaces[2] - 1)
-      
-      #between Ethiopia and the other countries, the underlying shapefile system is different
-      if(input$countrySelectUnit == 'Ethiopia'){
-        subunits <- eval(parse(text=paste0("base::subset(units[[i+1]]@data, str_starts(units[[i+1]]@data$",codevar,", topunitcode))")))
+      #if All was selected for the first administrative level
+      if (i==0){
+        subunits <- units[[i+1]]@data
+        
       } else {
-        subunits <- eval(parse(text=paste0("base::subset(units[[i+1]]@data, ",codetopvar," == topunitcode)")))
+        #importing variables
+        codetopvar <- varcodes[i]
+        
+        #topunit is the unit level just before the current one
+        topunit <- req(input[[paste0('unit', names(units)[i])]])
+        
+        #extracting the code of this topunit
+        spaces <- gregexpr(' ', topunit)[[1]]
+        topunitcode <- substr(topunit, spaces[1] + 1, spaces[2] - 1)
+        
+        #between Ethiopia and the other countries, the underlying shapefile system is different
+        if(country_unit() == 'Ethiopia'){
+          subunits <- eval(parse(text=paste0("base::subset(units[[i+1]]@data, str_starts(units[[i+1]]@data$",codevar,", topunitcode))")))
+        } else {
+          subunits <- eval(parse(text=paste0("base::subset(units[[i+1]]@data, ",codetopvar," == topunitcode)")))
+        }
       }
-      
+
       #list of all the selected units
       listAll <- eval(parse(text=paste0("paste(names(units)[i+1], subunits$",codevar,", '-', subunits$",namevar,", sep = ' ')")))
       names(listAll) <- subunits$namevar
@@ -1468,11 +1808,43 @@ observeEvent(input$addUnitButton, {
     #updating the selectinput with the new unit(s)
     newchosenunits <- c(chosenunit, input$listChosenUnits)
     updateSelectInput(session, inputId = "listChosenUnits", choices = newchosenunits, selected = newchosenunits)
-    
-    #updating the chosen admin levels dataframe
-    chosenAdminLevels <<- updateChosenLevels(chosenAdminLevels, chosenunit, units)
   }
 })
+
+#upon activation of the selectAllUnits button : updates the "Chosen Units" field 
+#with all lowest-level units for the country
+observeEvent(input$selectAllUnits, {
+  
+  #importing variables
+  units <- req(units())
+  varcodes <- unitsvarcodes()
+  varnames <- unitsvarnames()
+  
+  namevar <- varnames[length(units)]
+  codevar <- varcodes[length(units)]
+  
+  #list of all the selected units
+  units_data <- units[[length(units)]]@data
+  lowest_level <- names(units)[length(units)]
+  listAll <- eval(parse(text=paste0("paste(lowest_level, units_data$",codevar,", '-', units_data$",namevar,", sep = ' ')")))
+  names(listAll) <- units$namevar
+
+  #some of the lowest level units are NA and excluded
+  if (any(grepl('NA', listAll))){
+    chosenunit <- listAll[-grep("NA", listAll)]
+  } else {
+    chosenunit <- listAll
+  }
+  
+  #storing all the selected units to a global R object : this object will be used when extracting the data
+  all_lowest_level <<- chosenunit
+
+  #updating the selectinput with the new unit(s) : here we don't actually put the unit themselves,
+  #because they're too numerous. Instead, we display a message saying that all were selected
+  newchosenunits <- c(paste0("All ", length(chosenunit), " ", lowest_level, "s are selected"), input$listChosenUnits)
+  updateSelectInput(session, inputId = "listChosenUnits", choices = newchosenunits, selected = newchosenunits)
+})
+
 
 #computes chosen units
 chosenUnits <- reactive({
@@ -1481,7 +1853,14 @@ chosenUnits <- reactive({
   units <- req(units())
   listChosen <- req(input$listChosenUnits)
   varcodes <- req(unitsvarcodes())
-
+  
+  #if the list contains the message "All ... are selected", it means that the user clicked 
+  #the "Select all" button to select all lowest-level units. In that case, we fetch the
+  #units in the "all_lowest_level" object. They are too numerous to be stored in a select input
+  if (all_selected()){
+    listChosen <- all_lowest_level
+  }
+  
   unitNames <- list()
   
   l <- lapply(listChosen, function(unit){
@@ -1500,7 +1879,6 @@ chosenUnits <- reactive({
 chosenUnitsPolygons <- reactive({
   req(input$listChosenUnits)
   chosenunits <- req(chosenUnits())
-
   poly <- list() #initial list of polygons : empty
   
   for(i in seq_len(length(chosenunits))){
@@ -1512,8 +1890,12 @@ chosenUnitsPolygons <- reactive({
     spaces <- gregexpr(" ", x)[[1]]
     substr(x, spaces[3] + 1, nchar(x))
   })
+  
   list(polygons = poly, names = names)
 })
+
+output$panelStatus <- reactive(length(input$listChosenUnits)>0)
+outputOptions(output, "panelStatus", suspendWhenHidden = FALSE)
 
 #Shows the chosen administrative units as polygons on a map
 output$unitsMap <- renderLeaflet({
@@ -1527,14 +1909,13 @@ output$unitsMap <- renderLeaflet({
                                             style = list("color" = "#DA302C","font-family" = "serif","box-shadow" = "3px 3px rgba(0,0,0,0.25)","font-size" = "12px","border-color" = "rgba(0,0,0,0.5)")))
 })
 
-instructionsVarSelectUnit <- "<p class = 'textbox'> Now, select the geospatial variables you want extracted for your data. You can apply some filters to the table. To select a variable, click on its checkbox. You can choose between different time observations in the 'Time' column. If you want to choose all variables at once, click on the 'Select all' button. The selected variables will be shown in the 'Selected variables' field.</br> Then click on the statistics you would want computed for your administrative units.</p>"
+instructionsVarSelectUnit <- "<p class = 'textbox'> Now, select the geospatial variables you want extracted for your data. You can apply some filters to the table. To select a variable, click on its checkbox. You can choose between different time observations in the 'Time' column. If you want to choose all variables at once, click on the 'Select all' button. The selected variables will be shown in the 'Selected variables' field.</br></p>"
 
 #Gives the choice of variables to the user, like in the GPS coordinates page and also the statistics they want for these variables
 selected_vars_list <- c() 
   
 res_unit <- varSelectionSection(tab="unit",
-                           instructions=instructionsVarSelectUnit,
-                           country=input$countrySelectUnit)
+                           instructions=instructionsVarSelectUnit)
 
 output$varSelectUnit <- res_unit$section
 output$dynamic_datatable_unit <- res_unit$rendered_table
@@ -1548,9 +1929,9 @@ geoDataUnit <- eventReactive(input$unitextractbutton, {
   progress <-  Progress$new()
   progress$set(message = "Please wait.", value = 0)
 
+  selected_vars <- isolate(input$input_selected_vars_unit)
   #Getting the variables that were checked and putting them in a list
-  vars <- get_raster_file(isolate(input$input_selected_vars_unit), input$countrySelectUnit)
-
+  vars <- get_raster_file(selected_vars, country_unit())
   extracted <- list()
   
   for(i in 1:length(vars)){
@@ -1567,12 +1948,16 @@ geoDataUnit <- eventReactive(input$unitextractbutton, {
     } else print(paste(vars[[i]], 'doesnt exist'))
     
   }
-  table <- do.call("cbind", extracted)
-  row.names(table) <- names(chosenUnits)
+  
+  table <- as.data.frame(do.call("cbind", extracted))
+  rownames(table) <- names(chosenUnits)
+  
+  if (ncol(table)==length(selected_vars)){
+    colnames(table) <- paste0(stats, '.', selected_vars)
+  }
   
   #closing progress widget
   progress$close()
-  
   table
 })
 
@@ -1588,13 +1973,13 @@ output$unitStats <- DT::renderDataTable({
   )
 })
 
-includeAdminLevels <- function(geoDataUnit){
+includeAdminLevelsUnit <- function(geoDataUnit){
   # Function that merges the geospatial data for the unit with the corresponding administrative levels (related to improvement n°6)
   # Input : geoDataUnit : final output of the administrative unit tab
   # Output : the same data merged with the administrative levels
   
-  #converting the list to a dataframe
-  chosenAdminLevels <- as.data.frame(chosenAdminLevels)
+  #importing the reactive object
+  chosenAdminLevels <- chosenAdminLevels()
   
   #adding rownames from the id column
   rownames(chosenAdminLevels) <- chosenAdminLevels$id
@@ -1614,21 +1999,21 @@ includeAdminLevels <- function(geoDataUnit){
 #Making these geospatial statistics available to download as a CSV
 output$downloadDataUnit <- downloadHandler(
   filename = function() {
-    paste0("Geospatial_Data_", input$countrySelectUnit, ".csv")
+    paste0("Geospatial_Data_", country_unit(), ".csv")
   },
   content = function(file) {
     
     #if the user chose to include the administrative levels in the final output
-    if (input$includeLevels){
+    if (input$includeLevelsAdmin){
       
       #including the levels
-      geoDataUnitPlus <- includeAdminLevels(geoDataUnit())
+      geoDataUnitPlus <- includeAdminLevelsUnit(geoDataUnit())
       
       #writing
-      write.csv(geoDataUnitPlus, file)
+      write.csv(geoDataUnitPlus, file, quote=F)
       
     } else {
-      write.csv(geoDataUnit(), file)
+      write.csv(geoDataUnit(), file, quote=F)
     }
   },
   contentType = "text/csv"
@@ -1655,7 +2040,7 @@ output$downloadUnit <- renderUI({
     #download unit button
     fluidRow(style = "background-color:#FFFFFF;", 
              column(width = 2, offset = 1, downloadButton("downloadDataUnit", h3("Export as CSV"), class = "btn-outline-success btn-lg")),
-             column(width = 10, offset = 1, checkboxInput('includeLevels', 'Include the administrative level info in the CSV'))
+             column(width = 10, offset = 1, checkboxInput('includeLevelsAdmin', 'Include the administrative level info in the CSV'))
              ),
     fluidRow(style = "background-color:#FFFFFF;", br())
   )
